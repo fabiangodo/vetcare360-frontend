@@ -1,98 +1,259 @@
+import React, { useState, useEffect } from 'react';
 import { useAuth } from 'react-oidc-context';
-import { useState } from 'react';
 
-export default function App() {
+interface Producto {
+  id?: number;
+  nombre: string;
+  descripcion?: string;
+  precio: number;
+  stock: number;
+}
+
+export const App = () => {
   const auth = useAuth();
-  const [data, setData] = useState<any>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [productos, setProductos] = useState<Producto[]>([]);
+  const [mensajeStatus, setMensajeStatus] = useState<string>('Ninguna petición enviada aún.');
+  const [nuevoProducto, setNuevoProducto] = useState<Producto>({ nombre: '', precio: 0, stock: 0, descripcion: '' });
+  const [fichas, setFichas] = useState<any>(null);
 
-  // Asegurar la URL base limpia
-  const rawBaseUrl = import.meta.env.VITE_API_URL || 'https://oepttvmqv2.execute-api.us-east-1.amazonaws.com';
-  const apiBaseUrl = rawBaseUrl.endsWith('/') ? rawBaseUrl.slice(0, -1) : rawBaseUrl;
+  // Reemplazar con la URL base de tu API Gateway
+  const API_URL = 'https://oepttvmqv2.execute-api.us-east-1.amazonaws.com';
 
-  const consultarApi = async (endpoint: string, requiereAuth: boolean = true) => {
-    setError(null);
-    setData(null);
+  // Extraer roles desde Cognito
+  const userRoles: string[] = auth.user?.profile?.['cognito:groups'] as string[] || [];
+  const isAdmin = userRoles.includes('Admin');
+  const isVet = userRoles.includes('Veterinario') || isAdmin;
 
-    // Formatear endpoint para evitar barras dobles //
-    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-    const url = `${apiBaseUrl}${cleanEndpoint}`;
-
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json'
-    };
-
-    if (requiereAuth && auth.user?.id_token) {
-      headers['Authorization'] = `Bearer ${auth.user.id_token}`;
+  // Cargar productos al iniciar sesión
+  useEffect(() => {
+    if (auth.isAuthenticated) {
+      cargarProductos();
     }
+  }, [auth.isAuthenticated]);
 
+  const cargarProductos = async () => {
     try {
-      const response = await fetch(url, {
-        method: 'GET',
-        headers
+      const res = await fetch(`${API_URL}/api/productos`, {
+        headers: { Authorization: `Bearer ${auth.user?.id_token}` }
       });
-
-      if (response.status === 403) {
-        throw new Error("HTTP 403 Forbidden: No tienes el rol requerido para este endpoint.");
+      if (res.ok) {
+        const data = await res.json();
+        setProductos(data);
+      } else {
+        setMensajeStatus(`Error al cargar productos: ${res.status}`);
       }
-
-      if (!response.ok) {
-        throw new Error(`Error HTTP: ${response.status} ${response.statusText}`);
-      }
-
-      const resData = await response.json();
-      setData(resData);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setMensajeStatus('Error de conexión con la API.');
     }
   };
 
-  const cerrarSesion = () => {
-    // 1. Destruir la sesión local en React
-    auth.removeUser();
-
-    // 2. Destruir la cookie de sesión en la Hosted UI de AWS Cognito
-    const domain = `https://us-east-1gz8tiv6dd.auth.us-east-1.amazoncognito.com`;
-    const clientId = import.meta.env.VITE_COGNITO_APP_CLIENT_ID;
-    const logoutUri = encodeURIComponent("http://localhost:5173");
-
-    window.location.href = `${domain}/logout?client_id=${clientId}&logout_uri=${logoutUri}`;
+  const probarHealth = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/health`);
+      const data = await res.json();
+      setMensajeStatus(JSON.stringify(data));
+    } catch {
+      setMensajeStatus('Error al conectar con /health');
+    }
   };
 
-  if (auth.isLoading) return <div style={{ padding: '2rem' }}>Cargando sesión...</div>;
+  const crearProducto = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch(`${API_URL}/api/productos`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${auth.user?.id_token}`
+        },
+        body: JSON.stringify(nuevoProducto)
+      });
+      if (res.ok) {
+        setNuevoProducto({ nombre: '', precio: 0, stock: 0, descripcion: '' });
+        cargarProductos();
+        setMensajeStatus('Producto creado exitosamente.');
+      } else {
+        setMensajeStatus(`No tienes permiso para crear productos (${res.status}).`);
+      }
+    } catch {
+      setMensajeStatus('Error al enviar la petición.');
+    }
+  };
+
+  const eliminarProducto = async (id?: number) => {
+    if (!id) return;
+    try {
+      const res = await fetch(`${API_URL}/api/productos/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${auth.user?.id_token}` }
+      });
+      if (res.ok) {
+        cargarProductos();
+        setMensajeStatus('Producto eliminado.');
+      } else {
+        setMensajeStatus(`Error al eliminar (${res.status}). Requiere rol Admin.`);
+      }
+    } catch {
+      setMensajeStatus('Error al conectar.');
+    }
+  };
+
+  const cargarFichasMedicas = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/veterinario/fichas`, {
+        headers: { Authorization: `Bearer ${auth.user?.id_token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setFichas(data);
+      } else {
+        setMensajeStatus(`Acceso denegado a Fichas Médicas (${res.status}).`);
+      }
+    } catch {
+      setMensajeStatus('Error de conexión.');
+    }
+  };
 
   if (!auth.isAuthenticated) {
     return (
-      <div style={{ padding: '2rem', fontFamily: 'sans-serif' }}>
-        <h1>VetCare 360</h1>
-        <p>Inicia sesión para acceder a la gestión veterinaria.</p>
-        <button onClick={() => auth.signinRedirect()}>Iniciar Sesión (Cognito)</button>
+      <div style={styles.container}>
+        <div style={styles.card}>
+          <h2>🚀 Sistema VetCare 360 - Acceso</h2>
+          <button style={styles.btnPrimary} onClick={() => auth.signinRedirect()}>
+            Iniciar Sesión con Cognito
+          </button>
+        </div>
       </div>
     );
   }
 
-  const roles = (auth.user?.profile["cognito:groups"] as string[]) || [];
-
   return (
-    <div style={{ padding: '2rem', fontFamily: 'sans-serif' }}>
-      <h1>VetCare 360 - Dashboard</h1>
-      <p>Usuario: <strong>{auth.user?.profile.email}</strong></p>
-      <p>Rol: <strong>{roles.join(', ') || 'Sin Rol Asignado'}</strong></p>
+    <div style={styles.container}>
+      <div style={styles.content}>
+        <h2>🚀 VetCare 360 - Dashboard</h2>
 
-      <div style={{ display: 'flex', gap: '10px', margin: '20px 0' }}>
-        <button onClick={() => consultarApi('/health', false)}>Probar /health</button>
-        <button onClick={() => consultarApi('/api/productos')}>Ver Insumos/Productos</button>
-        <button onClick={() => consultarApi('/api/veterinario/fichas')}>Ver Fichas Médicas</button>
+        {/* Perfil del Usuario */}
+        <div style={styles.card}>
+          <h3>👤 Perfil del Usuario</h3>
+          <p><strong>Email:</strong> {auth.user?.profile?.email}</p>
+          <p>
+            <strong>Roles Asignados:</strong>{' '}
+            {userRoles.map((rol) => (
+              <span key={rol} style={styles.badge}>{rol}</span>
+            ))}
+          </p>
+          <button style={styles.btnDanger} onClick={() => auth.removeUser()}>
+            Cerrar Sesión
+          </button>
+        </div>
+
+        {/* Consola de Verificación */}
+        <div style={styles.card}>
+          <h3>⚡ Pruebas Backend (API Gateway)</h3>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button style={styles.btnSuccess} onClick={probarHealth}>
+              Ver Estado Backend (Público)
+            </button>
+            {isVet && (
+              <button style={styles.btnPrimary} onClick={cargarFichasMedicas}>
+                Consultar Fichas Médicas (Vet/Admin)
+              </button>
+            )}
+          </div>
+          <div style={styles.console}>{mensajeStatus}</div>
+        </div>
+
+        {/* Fichas Médicas (Solo Vet / Admin) */}
+        {fichas && (
+          <div style={styles.card}>
+            <h3>📋 Ficha Médica de Registro</h3>
+            <pre style={styles.jsonBox}>{JSON.stringify(fichas, null, 2)}</pre>
+          </div>
+        )}
+
+        {/* Tabla de Productos */}
+        <div style={styles.card}>
+          <h3>📦 Productos e Insumos</h3>
+          <table style={styles.table}>
+            <thead>
+              <tr>
+                <th style={styles.th}>Nombre</th>
+                <th style={styles.th}>Precio</th>
+                <th style={styles.th}>Stock</th>
+                {isAdmin && <th style={styles.th}>Acciones</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {productos.map((prod) => (
+                <tr key={prod.id} style={styles.tr}>
+                  <td style={styles.td}>{prod.nombre}</td>
+                  <td style={styles.td}>${prod.precio}</td>
+                  <td style={styles.td}>{prod.stock}</td>
+                  {isAdmin && (
+                    <td style={styles.td}>
+                      <button style={styles.btnDangerSm} onClick={() => eliminarProducto(prod.id)}>
+                        Eliminar
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* Formulario de Adición (Admin o Veterinario) */}
+          {isVet && (
+            <form onSubmit={crearProducto} style={styles.formInline}>
+              <h4>Agregar producto</h4>
+              <input
+                type="text"
+                placeholder="Nombre"
+                value={nuevoProducto.nombre}
+                onChange={(e) => setNuevoProducto({ ...nuevoProducto, nombre: e.target.value })}
+                style={styles.input}
+                required
+              />
+              <input
+                type="number"
+                placeholder="Precio"
+                value={nuevoProducto.precio || ''}
+                onChange={(e) => setNuevoProducto({ ...nuevoProducto, precio: Number(e.target.value) })}
+                style={styles.input}
+                required
+              />
+              <input
+                type="number"
+                placeholder="Stock"
+                value={nuevoProducto.stock || ''}
+                onChange={(e) => setNuevoProducto({ ...nuevoProducto, stock: Number(e.target.value) })}
+                style={styles.input}
+                required
+              />
+              <button type="submit" style={styles.btnSuccess}>Crear</button>
+            </form>
+          )}
+        </div>
       </div>
-
-      <button onClick={cerrarSesion}>Cerrar Sesión</button>
-
-      {error && <p style={{ color: 'red', marginTop: '20px' }}><strong>Error:</strong> {error}</p>}
-      {data && (
-        <pre style={{ background: '#1e1e1e', color: '#00ff88', padding: '15px', borderRadius: '5px', marginTop: '20px' }}>
-          {JSON.stringify(data, null, 2)}
-        </pre>
-      )}
     </div>
   );
-}
+};
+
+// Estilos Oscuros (Dark Mode CSS-in-JS)
+const styles: { [key: string]: React.CSSProperties } = {
+  container: { backgroundColor: '#121214', color: '#e1e1e6', minHeight: '100vh', padding: '20px', fontFamily: 'sans-serif' },
+  content: { maxWidth: '900px', margin: '0 auto' },
+  card: { backgroundColor: '#202024', borderRadius: '8px', padding: '20px', marginBottom: '20px', border: '1px solid #323238' },
+  badge: { backgroundColor: '#61dafb', color: '#000', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', marginRight: '5px' },
+  console: { backgroundColor: '#121214', padding: '12px', borderRadius: '6px', color: '#0000', border: '1px solid #323238', marginTop: '10px', fontFamily: 'monospace' },
+  btnPrimary: { backgroundColor: '#6366f1', color: '#fff', border: 'none', padding: '10px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' },
+  btnSuccess: { backgroundColor: '#22c55e', color: '#fff', border: 'none', padding: '10px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' },
+  btnDanger: { backgroundColor: '#ef4444', color: '#fff', border: 'none', padding: '10px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' },
+  btnDangerSm: { backgroundColor: '#ef4444', color: '#fff', border: 'none', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer' },
+  table: { width: '100%', borderCollapse: 'collapse', marginTop: '15px' },
+  th: { borderBottom: '2px solid #323238', textAlign: 'left', padding: '10px', color: '#a8a8b3' },
+  td: { borderBottom: '1px solid #323238', padding: '10px' },
+  tr: { borderBottom: '1px solid #323238' },
+  formInline: { display: 'flex', gap: '10px', alignItems: 'center', marginTop: '20px', flexWrap: 'wrap' },
+  input: { backgroundColor: '#121214', border: '1px solid #323238', color: '#fff', padding: '8px 12px', borderRadius: '6px' },
+  jsonBox: { backgroundColor: '#121214', padding: '10px', borderRadius: '6px', color: '#38edf8' }
+};
