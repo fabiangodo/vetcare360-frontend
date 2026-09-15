@@ -9,22 +9,19 @@ interface Producto {
   stock: number;
 }
 
-export const App = () => {
+export default function App() {
   const auth = useAuth();
   const [productos, setProductos] = useState<Producto[]>([]);
   const [mensajeStatus, setMensajeStatus] = useState<string>('Ninguna petición enviada aún.');
   const [nuevoProducto, setNuevoProducto] = useState<Producto>({ nombre: '', precio: 0, stock: 0, descripcion: '' });
   const [fichas, setFichas] = useState<any>(null);
 
-  // Reemplazar con la URL base de tu API Gateway
   const API_URL = 'https://oepttvmqv2.execute-api.us-east-1.amazonaws.com';
 
-  // Extraer roles desde Cognito
   const userRoles: string[] = auth.user?.profile?.['cognito:groups'] as string[] || [];
   const isAdmin = userRoles.includes('Admin');
   const isVet = userRoles.includes('Veterinario') || isAdmin;
 
-  // Cargar productos al iniciar sesión
   useEffect(() => {
     if (auth.isAuthenticated) {
       cargarProductos();
@@ -114,6 +111,14 @@ export const App = () => {
     }
   };
 
+  const cerrarSesion = () => {
+    auth.removeUser();
+    const cognitoDomain = "https://us-east-1gz8tiv6dd.auth.us-east-1.amazoncognito.com";
+    const clientId = "3j84mt3n833o1qucrr2uuo3ohc";
+    const logoutRedirect = "http://localhost:5173/";
+    window.location.href = `${cognitoDomain}/logout?client_id=${clientId}&logout_uri=${encodeURIComponent(logoutRedirect)}`;
+  };
+
   if (!auth.isAuthenticated) {
     return (
       <div style={styles.container}>
@@ -132,7 +137,6 @@ export const App = () => {
       <div style={styles.content}>
         <h2>🚀 VetCare 360 - Dashboard</h2>
 
-        {/* Perfil del Usuario */}
         <div style={styles.card}>
           <h3>👤 Perfil del Usuario</h3>
           <p><strong>Email:</strong> {auth.user?.profile?.email}</p>
@@ -142,12 +146,11 @@ export const App = () => {
               <span key={rol} style={styles.badge}>{rol}</span>
             ))}
           </p>
-          <button style={styles.btnDanger} onClick={() => auth.removeUser()}>
+          <button style={styles.btnDanger} onClick={cerrarSesion}>
             Cerrar Sesión
           </button>
         </div>
 
-        {/* Consola de Verificación */}
         <div style={styles.card}>
           <h3>⚡ Pruebas Backend (API Gateway)</h3>
           <div style={{ display: 'flex', gap: '10px' }}>
@@ -163,7 +166,6 @@ export const App = () => {
           <div style={styles.console}>{mensajeStatus}</div>
         </div>
 
-        {/* Fichas Médicas (Solo Vet / Admin) */}
         {fichas && (
           <div style={styles.card}>
             <h3>📋 Ficha Médica de Registro</h3>
@@ -171,7 +173,6 @@ export const App = () => {
           </div>
         )}
 
-        {/* Tabla de Productos */}
         <div style={styles.card}>
           <h3>📦 Productos e Insumos</h3>
           <table style={styles.table}>
@@ -201,7 +202,6 @@ export const App = () => {
             </tbody>
           </table>
 
-          {/* Formulario de Adición (Admin o Veterinario) */}
           {isVet && (
             <form onSubmit={crearProducto} style={styles.formInline}>
               <h4>Agregar producto</h4>
@@ -236,15 +236,14 @@ export const App = () => {
       </div>
     </div>
   );
-};
+}
 
-// Estilos Oscuros (Dark Mode CSS-in-JS)
 const styles: { [key: string]: React.CSSProperties } = {
   container: { backgroundColor: '#121214', color: '#e1e1e6', minHeight: '100vh', padding: '20px', fontFamily: 'sans-serif' },
   content: { maxWidth: '900px', margin: '0 auto' },
   card: { backgroundColor: '#202024', borderRadius: '8px', padding: '20px', marginBottom: '20px', border: '1px solid #323238' },
   badge: { backgroundColor: '#61dafb', color: '#000', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', marginRight: '5px' },
-  console: { backgroundColor: '#121214', padding: '12px', borderRadius: '6px', color: '#0000', border: '1px solid #323238', marginTop: '10px', fontFamily: 'monospace' },
+  console: { backgroundColor: '#121214', padding: '12px', borderRadius: '6px', color: '#00ff66', border: '1px solid #323238', marginTop: '10px', fontFamily: 'monospace' },
   btnPrimary: { backgroundColor: '#6366f1', color: '#fff', border: 'none', padding: '10px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' },
   btnSuccess: { backgroundColor: '#22c55e', color: '#fff', border: 'none', padding: '10px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' },
   btnDanger: { backgroundColor: '#ef4444', color: '#fff', border: 'none', padding: '10px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' },
