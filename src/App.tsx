@@ -17,7 +17,7 @@ export default function App() {
   const [fichas, setFichas] = useState<any>(null);
 
   // Incluye la etapa /prod necesaria para API Gateway
-  const API_URL = 'https://oepttvmqv2.execute-api.us-east-1.amazonaws.com/prod';
+  const API_URL = 'https://oepttvmqv2.execute-api.us-east-1.amazonaws.com';
 
   const userRoles: string[] = auth.user?.profile?.['cognito:groups'] as string[] || [];
   const isAdmin = userRoles.includes('Admin');
