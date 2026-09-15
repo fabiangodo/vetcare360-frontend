@@ -16,7 +16,8 @@ export default function App() {
   const [nuevoProducto, setNuevoProducto] = useState<Producto>({ nombre: '', precio: 0, stock: 0, descripcion: '' });
   const [fichas, setFichas] = useState<any>(null);
 
-  const API_URL = 'https://oepttvmqv2.execute-api.us-east-1.amazonaws.com';
+  // Incluye la etapa /prod necesaria para API Gateway
+  const API_URL = 'https://oepttvmqv2.execute-api.us-east-1.amazonaws.com/prod';
 
   const userRoles: string[] = auth.user?.profile?.['cognito:groups'] as string[] || [];
   const isAdmin = userRoles.includes('Admin');
@@ -31,11 +32,10 @@ export default function App() {
   const cargarProductos = async () => {
     try {
       const res = await fetch(`${API_URL}/api/productos`, {
-        headers: { Authorization: `Bearer ${auth.user?.id_token}` }
+        headers: { Authorization: `Bearer ${auth.user?.access_token}` }
       });
       if (res.ok) {
         const data = await res.json();
-        // Mapeo de la respuesta en inglés (Backend DTO) hacia la interfaz en español (State)
         const productosMapeados: Producto[] = data.map((item: any) => ({
           id: item.id,
           nombre: item.name,
@@ -65,7 +65,6 @@ export default function App() {
   const crearProducto = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      // Mapeo del estado en español al DTO en inglés esperado por Spring Boot (ProductRequestDto)
       const payload = {
         name: nuevoProducto.nombre,
         description: nuevoProducto.descripcion || 'Sin descripción',
@@ -77,7 +76,7 @@ export default function App() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${auth.user?.id_token}`
+          Authorization: `Bearer ${auth.user?.access_token}`
         },
         body: JSON.stringify(payload)
       });
@@ -87,7 +86,7 @@ export default function App() {
         cargarProductos();
         setMensajeStatus('Producto creado exitosamente en Supabase.');
       } else {
-        setMensajeStatus(`Error al crear producto (${res.status}). Verifica tus permisos de rol.`);
+        setMensajeStatus(`Error al crear producto (${res.status}). Verifica la configuración de API Gateway/Backend.`);
       }
     } catch {
       setMensajeStatus('Error al enviar la petición.');
@@ -99,7 +98,7 @@ export default function App() {
     try {
       const res = await fetch(`${API_URL}/api/productos/${id}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${auth.user?.id_token}` }
+        headers: { Authorization: `Bearer ${auth.user?.access_token}` }
       });
       if (res.ok) {
         cargarProductos();
@@ -115,7 +114,7 @@ export default function App() {
   const cargarFichasMedicas = async () => {
     try {
       const res = await fetch(`${API_URL}/api/veterinario/fichas`, {
-        headers: { Authorization: `Bearer ${auth.user?.id_token}` }
+        headers: { Authorization: `Bearer ${auth.user?.access_token}` }
       });
       if (res.ok) {
         const data = await res.json();
