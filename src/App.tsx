@@ -35,7 +35,15 @@ export default function App() {
       });
       if (res.ok) {
         const data = await res.json();
-        setProductos(data);
+        // Mapeo de la respuesta en inglés (Backend DTO) hacia la interfaz en español (State)
+        const productosMapeados: Producto[] = data.map((item: any) => ({
+          id: item.id,
+          nombre: item.name,
+          descripcion: item.description,
+          precio: item.price,
+          stock: item.stock
+        }));
+        setProductos(productosMapeados);
       } else {
         setMensajeStatus(`Error al cargar productos: ${res.status}`);
       }
@@ -57,20 +65,29 @@ export default function App() {
   const crearProducto = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      // Mapeo del estado en español al DTO en inglés esperado por Spring Boot (ProductRequestDto)
+      const payload = {
+        name: nuevoProducto.nombre,
+        description: nuevoProducto.descripcion || 'Sin descripción',
+        price: Number(nuevoProducto.precio),
+        stock: Number(nuevoProducto.stock)
+      };
+
       const res = await fetch(`${API_URL}/api/productos`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${auth.user?.id_token}`
         },
-        body: JSON.stringify(nuevoProducto)
+        body: JSON.stringify(payload)
       });
+
       if (res.ok) {
         setNuevoProducto({ nombre: '', precio: 0, stock: 0, descripcion: '' });
         cargarProductos();
-        setMensajeStatus('Producto creado exitosamente.');
+        setMensajeStatus('Producto creado exitosamente en Supabase.');
       } else {
-        setMensajeStatus(`No tienes permiso para crear productos (${res.status}).`);
+        setMensajeStatus(`Error al crear producto (${res.status}). Verifica tus permisos de rol.`);
       }
     } catch {
       setMensajeStatus('Error al enviar la petición.');
