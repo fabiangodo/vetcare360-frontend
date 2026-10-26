@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Dog, Calendar, LogOut } from 'lucide-react';
+import { LayoutDashboard, Dog, Calendar } from 'lucide-react';
 
 interface SidebarProps {
   currentTab: string;
