@@ -3,17 +3,20 @@ import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './pages/Dashboard';
 import { Mascotas } from './pages/Mascotas';
 import { Citas } from './pages/Citas';
-import { Bell, User } from 'lucide-react';
+import { Bell, UserCheck } from 'lucide-react';
+
+export type UserRole = 'admin' | 'editor' | 'cliente';
 
 export function App() {
   const [currentTab, setCurrentTab] = useState('dashboard');
+  const [role, setRole] = useState<UserRole>('admin');
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f8fafc', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
-      <Sidebar currentTab={currentTab} setCurrentTab={setCurrentTab} />
+      <Sidebar currentTab={currentTab} setCurrentTab={setCurrentTab} role={role} />
       
       <main style={{ flex: 1, padding: '2rem 2.5rem', overflowY: 'auto' }}>
-        {/* Header Superior */}
+        {/* Header Superior con Selector de Rol */}
         <header style={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -29,11 +32,39 @@ export function App() {
               {currentTab === 'citas' && 'Control de Citas'}
             </h1>
             <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>
-              Gestión clínica veterinaria y registro sanitario
+              Modo activo: <strong style={{ textTransform: 'uppercase', color: '#10b981' }}>{role}</strong>
             </p>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            {/* Selector de Perfil/Rol para Pruebas */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: '#f1f5f9', padding: '0.3rem 0.6rem', borderRadius: '10px' }}>
+              <UserCheck size={16} color="#64748b" />
+              <select
+                value={role}
+                onChange={(e) => {
+                  const newRole = e.target.value as UserRole;
+                  setRole(newRole);
+                  if (newRole === 'cliente' && currentTab === 'dashboard') {
+                    setCurrentTab('mascotas'); // Los clientes no ven el dashboard global
+                  }
+                }}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  fontWeight: '700',
+                  color: '#334155',
+                  fontSize: '0.85rem',
+                  outline: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="admin">Perfil: Administrador</option>
+                <option value="editor">Perfil: Editor (Vet)</option>
+                <option value="cliente">Perfil: Cliente (Dueño)</option>
+              </select>
+            </div>
+
             <button style={{
               backgroundColor: '#fff',
               border: '1px solid #e2e8f0',
@@ -45,36 +76,12 @@ export function App() {
             }}>
               <Bell size={18} />
             </button>
-
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.75rem',
-              backgroundColor: '#fff',
-              padding: '0.4rem 0.8rem 0.4rem 0.4rem',
-              borderRadius: '30px',
-              border: '1px solid #e2e8f0'
-            }}>
-              <div style={{
-                backgroundColor: '#10b981',
-                width: '32px',
-                height: '32px',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#fff'
-              }}>
-                <User size={18} />
-              </div>
-              <span style={{ fontSize: '0.85rem', fontWeight: '700', color: '#334155' }}>Dr. Fabián</span>
-            </div>
           </div>
         </header>
 
-        {currentTab === 'dashboard' && <Dashboard />}
-        {currentTab === 'mascotas' && <Mascotas />}
-        {currentTab === 'citas' && <Citas />}
+        {currentTab === 'dashboard' && role !== 'cliente' && <Dashboard />}
+        {currentTab === 'mascotas' && <Mascotas role={role} />}
+        {currentTab === 'citas' && <Citas role={role} />}
       </main>
     </div>
   );

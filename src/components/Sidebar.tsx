@@ -1,16 +1,18 @@
 import React from 'react';
 import { LayoutDashboard, Dog, Calendar, HeartPulse, ShieldCheck } from 'lucide-react';
+import { UserRole } from '../App';
 
 interface SidebarProps {
   currentTab: string;
   setCurrentTab: (tab: string) => void;
+  role: UserRole;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab, role }) => {
   const menuItems = [
-    { id: 'dashboard', label: 'Panel Principal', icon: LayoutDashboard },
-    { id: 'mascotas', label: 'Pacientes / Mascotas', icon: Dog },
-    { id: 'citas', label: 'Agenda Médica', icon: Calendar },
+    ...(role !== 'cliente' ? [{ id: 'dashboard', label: 'Panel Principal', icon: LayoutDashboard }] : []),
+    { id: 'mascotas', label: role === 'cliente' ? 'Mis Mascotas' : 'Pacientes / Mascotas', icon: Dog },
+    { id: 'citas', label: role === 'cliente' ? 'Mis Citas' : 'Agenda Médica', icon: Calendar },
   ];
 
   return (
@@ -26,7 +28,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) =
       boxShadow: '4px 0 12px rgba(0,0,0,0.05)'
     }}>
       <div>
-        {/* Logo Veterinario */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '2.5rem', paddingLeft: '0.5rem' }}>
           <div style={{
             backgroundColor: '#10b981',
@@ -40,14 +41,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) =
             <HeartPulse size={24} color="#fff" />
           </div>
           <div>
-            <h2 style={{ fontSize: '1.2rem', fontWeight: '800', margin: 0, color: '#f8fafc', letterSpacing: '0.5px' }}>
+            <h2 style={{ fontSize: '1.2rem', fontWeight: '800', margin: 0, color: '#f8fafc' }}>
               VetCare <span style={{ color: '#34d399' }}>360</span>
             </h2>
             <p style={{ margin: 0, fontSize: '0.7rem', color: '#94a3b8', fontWeight: '500' }}>Centro Veterinario</p>
           </div>
         </div>
         
-        {/* Menú de Navegación */}
         <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
           {menuItems.map((item) => {
             const Icon = item.icon;
@@ -81,7 +81,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) =
         </nav>
       </div>
 
-      {/* Widget de Estado Sistema */}
       <div style={{
         backgroundColor: 'rgba(30, 41, 59, 0.7)',
         borderRadius: '12px',
@@ -93,8 +92,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) =
       }}>
         <ShieldCheck size={20} color="#10b981" />
         <div>
-          <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: '600', color: '#e2e8f0' }}>AWS EC2 Conectado</p>
-          <p style={{ margin: 0, fontSize: '0.65rem', color: '#64748b' }}>v1.0.2 • Producción</p>
+          <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: '600', color: '#e2e8f0' }}>Rol: {role.toUpperCase()}</p>
+          <p style={{ margin: 0, fontSize: '0.65rem', color: '#64748b' }}>AWS Cognito Synced</p>
         </div>
       </div>
     </aside>
