@@ -1,6 +1,6 @@
 import React from 'react';
 import { LayoutDashboard, Dog, Calendar, HeartPulse, ShieldCheck } from 'lucide-react';
-import { UserRole } from '../App';
+import type { UserRole } from '../App';
 
 interface SidebarProps {
   currentTab: string;
@@ -93,7 +93,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab, rol
         <ShieldCheck size={20} color="#10b981" />
         <div>
           <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: '600', color: '#e2e8f0' }}>Rol: {role.toUpperCase()}</p>
-          <p style={{ margin: 0, fontSize: '0.65rem', color: '#64748b' }}>AWS Cognito Synced</p>
+          <p style={{ margin: 0, fontSize: '0.65rem', color: '#64748b' }}>AWS EC2 Conectado</p>
         </div>
       </div>
     </aside>

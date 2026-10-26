@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Plus, Calendar as CalendarIcon, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
-import { UserRole } from '../App';
+import { Plus, Calendar as CalendarIcon, Clock, CheckCircle2, AlertCircle, Trash2 } from 'lucide-react';
+import type { UserRole } from '../App';
 
 interface CitasProps {
   role: UserRole;
@@ -48,7 +48,11 @@ export const Citas: React.FC<CitasProps> = ({ role }) => {
     setShowModal(false);
   };
 
-  // Filtrar citas según el rol
+  const handleEliminarCita = (id: number) => {
+    if (role !== 'editor') return;
+    setCitas(citas.filter(c => c.id !== id));
+  };
+
   const listaCitas = role === 'cliente'
     ? citas.filter(c => c.propietario.includes('Carlos'))
     : citas;
@@ -57,7 +61,11 @@ export const Citas: React.FC<CitasProps> = ({ role }) => {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <p style={{ margin: 0, color: '#64748b', fontSize: '0.9rem' }}>
-          {role === 'cliente' ? 'Histórico de citas de tus mascotas' : 'Gestión completa de agenda clínica'}
+          {role === 'cliente' 
+            ? 'Histórico de citas de tus mascotas' 
+            : role === 'editor'
+            ? 'Gestión clínica exclusiva: Puedes agendar y cancelar citas médicas.'
+            : 'Gestión de agenda clínica'}
         </p>
         <button
           onClick={() => setShowModal(true)}
@@ -88,6 +96,7 @@ export const Citas: React.FC<CitasProps> = ({ role }) => {
               <th style={{ padding: '1rem' }}>Hora</th>
               <th style={{ padding: '1rem' }}>Motivo</th>
               <th style={{ padding: '1rem' }}>Estado</th>
+              {role === 'editor' && <th style={{ padding: '1rem', textAlign: 'right' }}>Acciones (Solo Editor)</th>}
             </tr>
           </thead>
           <tbody style={{ fontSize: '0.9rem', color: '#334155' }}>
@@ -128,6 +137,30 @@ export const Citas: React.FC<CitasProps> = ({ role }) => {
                     {c.estado}
                   </span>
                 </td>
+                {role === 'editor' && (
+                  <td style={{ padding: '1rem', textAlign: 'right' }}>
+                    <button
+                      onClick={() => handleEliminarCita(c.id)}
+                      title="Eliminar Cita (Solo Editor)"
+                      style={{
+                        backgroundColor: '#fee2e2',
+                        color: '#ef4444',
+                        border: 'none',
+                        borderRadius: '8px',
+                        padding: '0.4rem 0.8rem',
+                        cursor: 'pointer',
+                        fontWeight: '600',
+                        fontSize: '0.75rem',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.3rem'
+                      }}
+                    >
+                      <Trash2 size={14} />
+                      Cancelar Cita
+                    </button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

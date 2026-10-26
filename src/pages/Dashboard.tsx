@@ -25,7 +25,9 @@ export const Dashboard: React.FC = () => {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
             <Sparkles size={18} color="#a7f3d0" />
-            <span style={{ fontSize: '0.85rem', fontWeight: '600', color: '#a7f3d0', letterSpacing: '0.5px' }}>PANEL DE CONTROL VETERINARIO</span>
+            <span style={{ fontSize: '0.85rem', fontWeight: '600', color: '#a7f3d0', letterSpacing: '0.5px' }}>
+              PANEL DE CONTROL VETERINARIO
+            </span>
           </div>
           <h2 style={{ margin: 0, fontSize: '1.75rem', fontWeight: '800' }}>¡Hola! Todo listo para las consultas de hoy</h2>
           <p style={{ margin: '0.5rem 0 0 0', opacity: 0.9, fontSize: '0.95rem' }}>Tienes 8 citas agendadas y 3 controles médicos programados.</p>
@@ -48,7 +50,6 @@ export const Dashboard: React.FC = () => {
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'space-between',
-                transition: 'transform 0.2s',
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -70,7 +71,7 @@ export const Dashboard: React.FC = () => {
         })}
       </div>
 
-      {/* Próximas Citas */}
+      {/* Tabla de Próximos Pacientes */}
       <div style={{ backgroundColor: '#fff', padding: '1.75rem', borderRadius: '20px', border: '1px solid #f1f5f9', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
           <div>

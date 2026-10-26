@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, Search, Dog, Cat, Trash2, Edit } from 'lucide-react';
-import { UserRole } from '../App';
+import type { UserRole } from '../App';
 
 interface MascotasProps {
   role: UserRole;
@@ -43,11 +43,10 @@ export const Mascotas: React.FC<MascotasProps> = ({ role }) => {
   };
 
   const handleEliminar = (id: number) => {
-    if (role !== 'admin') return;
+    if (role !== 'editor') return;
     setMascotas(mascotas.filter(m => m.id !== id));
   };
 
-  // Si es cliente, simulamos que solo ve sus mascotas (las de Carlos Pérez)
   const listaMascotas = role === 'cliente' 
     ? mascotas.filter(m => m.propietario.includes('Carlos'))
     : mascotas;
@@ -113,11 +112,11 @@ export const Mascotas: React.FC<MascotasProps> = ({ role }) => {
                 <td style={{ padding: '1rem' }}>{m.edad} año(s)</td>
                 <td style={{ padding: '1rem' }}>{m.propietario}</td>
                 <td style={{ padding: '1rem', textAlign: 'right' }}>
-                  {(role === 'admin' || role === 'editor') && (
+                  {(role === 'veterinario' || role === 'editor') && (
                     <button style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#64748b', marginRight: '0.5rem' }}><Edit size={16} /></button>
                   )}
-                  {role === 'admin' && (
-                    <button onClick={() => handleEliminar(m.id)} title="Solo Admin" style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#ef4444' }}><Trash2 size={16} /></button>
+                  {role === 'editor' && (
+                    <button onClick={() => handleEliminar(m.id)} title="Solo Editor" style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#ef4444' }}><Trash2 size={16} /></button>
                   )}
                 </td>
               </tr>

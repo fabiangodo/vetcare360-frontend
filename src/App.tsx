@@ -9,14 +9,13 @@ export type UserRole = 'admin' | 'editor' | 'cliente';
 
 export function App() {
   const [currentTab, setCurrentTab] = useState('dashboard');
-  const [role, setRole] = useState<UserRole>('admin');
+  const [role, setRole] = useState<UserRole>('editor');
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f8fafc', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
       <Sidebar currentTab={currentTab} setCurrentTab={setCurrentTab} role={role} />
       
       <main style={{ flex: 1, padding: '2rem 2.5rem', overflowY: 'auto' }}>
-        {/* Header Superior con Selector de Rol */}
         <header style={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -37,7 +36,6 @@ export function App() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            {/* Selector de Perfil/Rol para Pruebas */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: '#f1f5f9', padding: '0.3rem 0.6rem', borderRadius: '10px' }}>
               <UserCheck size={16} color="#64748b" />
               <select
@@ -46,7 +44,7 @@ export function App() {
                   const newRole = e.target.value as UserRole;
                   setRole(newRole);
                   if (newRole === 'cliente' && currentTab === 'dashboard') {
-                    setCurrentTab('mascotas'); // Los clientes no ven el dashboard global
+                    setCurrentTab('mascotas');
                   }
                 }}
                 style={{
@@ -59,8 +57,8 @@ export function App() {
                   cursor: 'pointer'
                 }}
               >
-                <option value="admin">Perfil: Administrador</option>
-                <option value="editor">Perfil: Editor (Vet)</option>
+                <option value="editor">Perfil: Editor (Control Total)</option>
+                <option value="admin">Perfil: Admin (Veterinario)</option>
                 <option value="cliente">Perfil: Cliente (Dueño)</option>
               </select>
             </div>
