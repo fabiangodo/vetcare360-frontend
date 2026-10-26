@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './pages/Dashboard';
 import { Mascotas } from './pages/Mascotas';
+import { Citas } from './pages/Citas';
 
 export function App() {
   const [currentTab, setCurrentTab] = useState('dashboard');
@@ -21,7 +22,7 @@ export function App() {
 
         {currentTab === 'dashboard' && <Dashboard />}
         {currentTab === 'mascotas' && <Mascotas />}
-        {currentTab === 'citas' && <p>Vista de Citas (Siguiente paso)</p>}
+        {currentTab === 'citas' && <Citas />}
       </main>
     </div>
   );
