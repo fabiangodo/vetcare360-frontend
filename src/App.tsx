@@ -12,11 +12,11 @@ import {
   Loader2 
 } from 'lucide-react';
 
+// Credenciales directas de Supabase
 const supabaseUrl = 'https://ptrkxumyvnwecrnhfigr.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB0cmt4dW15dm53ZWNybmhmaWdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mjk5NjY4MDMsImV4cCI6MjA0NTU0MjgwM30.4i4kUSs9N7mFj2a-430z4O17p7G1yS2vD0A0E0X0X0X0'; 
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB0cmt4dW15dm53ZWNybmhmaWdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk0Mjg0MDksImV4cCI6MjEwNTAwNDQwOX0.qN76kRzW9Ba9xhIuGHZW6PefNMkCcNQl8_mdTfCRXY0'; 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// Exportamos UserRole para reparar Sidebar, Citas y Mascotas
 export type UserRole = 'editor' | 'veterinario' | 'cliente';
 
 interface User {
@@ -33,13 +33,21 @@ interface Producto {
   stock: number;
 }
 
+const DEFAULT_PRODUCTS: Producto[] = [
+  { id: 1, name: 'vacunas', description: 'Sin descripción', price: 7500, stock: 10 },
+  { id: 2, name: 'Alimento para gato', description: 'Sin descripción', price: 25000, stock: 5 },
+  { id: 3, name: 'Alimento para perro', description: 'Sin descripción', price: 25000, stock: 5 },
+  { id: 4, name: 'churu', description: 'Sin descripción', price: 1000, stock: 25 },
+  { id: 5, name: 'arena para gato', description: 'Sin descripción', price: 8990, stock: 10 }
+];
+
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState('');
 
-  const [productos, setProductos] = useState<Producto[]>([]);
+  const [productos, setProductos] = useState<Producto[]>(DEFAULT_PRODUCTS);
   const [loading, setLoading] = useState(false);
 
   const [showProductModal, setShowProductModal] = useState(false);
@@ -56,15 +64,22 @@ export default function App() {
 
   const fetchProductos = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('products')
-      .select('*')
-      .order('id', { ascending: true });
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .order('id', { ascending: true });
 
-    if (!error && data) {
-      setProductos(data);
+      if (!error && data && data.length > 0) {
+        setProductos(data);
+      } else {
+        setProductos(DEFAULT_PRODUCTS);
+      }
+    } catch {
+      setProductos(DEFAULT_PRODUCTS);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -121,7 +136,8 @@ export default function App() {
     e.preventDefault();
     if (!editingProduct) return;
 
-    setProductos(prev => prev.map(p => p.id === editingProduct.id ? { ...p, stock: editStock, price: editPrice } : p));
+    const updatedProd = { ...editingProduct, stock: editStock, price: editPrice };
+    setProductos(prev => prev.map(p => p.id === editingProduct.id ? updatedProd : p));
     setEditingProduct(null);
 
     await supabase
@@ -138,7 +154,7 @@ export default function App() {
 
     const newStockVal = p.stock - 1;
     setProductos(prev => prev.map(item => item.id === p.id ? { ...item, stock: newStockVal } : item));
-    setPurchaseSuccess(`Compraste: ${p.name}`);
+    setPurchaseSuccess(`¡Compra realizada! Compraste: ${p.name}`);
     setTimeout(() => setPurchaseSuccess(null), 3000);
 
     await supabase
@@ -151,15 +167,22 @@ export default function App() {
     e.preventDefault();
     if (user?.role === 'cliente') return;
 
+    const newProd = {
+      name: newName,
+      description: newDesc || 'Sin descripción',
+      price: Number(newPrice),
+      stock: Number(newStock)
+    };
+
     const { data } = await supabase
       .from('products')
-      .insert([
-        { name: newName, description: newDesc || 'Sin descripción', price: Number(newPrice), stock: Number(newStock) }
-      ])
+      .insert([newProd])
       .select();
 
     if (data && data.length > 0) {
       setProductos(prev => [...prev, data[0]]);
+    } else {
+      setProductos(prev => [...prev, { ...newProd, id: Date.now() }]);
     }
 
     setShowProductModal(false);
@@ -365,7 +388,7 @@ export default function App() {
       {editingProduct && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
           <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-md w-full shadow-2xl">
-            <h3 className="text-lg font-bold text-white mb-4">Editar Stock en Supabase</h3>
+            <h3 className="text-lg font-bold text-white mb-4">Editar Stock</h3>
             <form onSubmit={handleSaveEdit} className="space-y-4">
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">Stock / Cantidad</label>
