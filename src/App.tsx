@@ -70,7 +70,7 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState<'mascotas' | 'citas' | 'productos' | 'usuarios'>('mascotas');
 
-  // Listas de datos desde Supabase
+  // Listas de datos
   const [productos, setProductos] = useState<Producto[]>([]);
   const [mascotas, setMascotas] = useState<Mascota[]>([]);
   const [citas, setCitas] = useState<Cita[]>([]);
@@ -99,7 +99,6 @@ export default function App() {
   const [editPrice, setEditPrice] = useState<number>(0);
   const [editStock, setEditStock] = useState<number>(0);
 
-  // Cargar datos
   const fetchAllData = async () => {
     setLoading(true);
 
@@ -153,10 +152,10 @@ export default function App() {
       userName = 'usuario_admin';
     } else if (cleanEmail === 'editor@test.com') {
       assignedRole = 'veterinario';
-      userName = 'usuario_editor';
+      userName = 'usuario_veterinario';
     } else if (cleanEmail === 'viewer@test.com') {
       assignedRole = 'cliente';
-      userName = 'usuario_viewer';
+      userName = 'usuario_cliente';
     }
 
     if (assignedRole) {
@@ -289,6 +288,15 @@ export default function App() {
               Iniciar Sesión
             </button>
           </form>
+
+          <div className="mt-8 pt-6 border-t border-slate-700/50 text-xs text-slate-400">
+            <p className="font-semibold text-slate-300 mb-2">Cuentas disponibles:</p>
+            <ul className="space-y-1 font-mono text-[11px]">
+              <li><strong className="text-purple-400">Admin:</strong> admin@test.com</li>
+              <li><strong className="text-blue-400">Veterinario:</strong> editor@test.com</li>
+              <li><strong className="text-emerald-400">Cliente:</strong> viewer@test.com</li>
+            </ul>
+          </div>
         </div>
       </div>
     );
@@ -349,7 +357,6 @@ export default function App() {
           <Package className="w-4 h-4" /> Productos e Inventario
         </button>
 
-        {/* Únicamente visible para el rol Administrador / Editor */}
         {user.role === 'editor' && (
           <button
             onClick={() => setActiveTab('usuarios')}
