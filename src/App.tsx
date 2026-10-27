@@ -16,9 +16,9 @@ import {
   Users,
   X,
   Receipt,
-  Minus,
   FileCheck
 } from 'lucide-react';
+import { registrarMascotaEnAWS } from './services/api';
 
 const supabaseUrl = 'https://ptrkxumyvnwecrnhfigr.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB0cmt4dW15dm53ZWNybmhmaWdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk0Mjg0MDksImV4cCI6MjEwNTAwNDQwOX0.qN76kRzW9Ba9xhIuGHZW6PefNMkCcNQl8_mdTfCRXY0'; 
@@ -86,7 +86,7 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState<'mascotas' | 'citas' | 'productos' | 'usuarios' | 'boletas'>('mascotas');
 
-  // Listas de datos desde Supabase
+  // Listas de datos
   const [productos, setProductos] = useState<Producto[]>([]);
   const [mascotas, setMascotas] = useState<Mascota[]>([]);
   const [citas, setCitas] = useState<Cita[]>([]);
@@ -208,7 +208,7 @@ export default function App() {
       const existing = prev.find(item => item.producto.id === p.id);
       if (existing) {
         if (existing.cantidad >= p.stock) {
-          alert(`Límite de stock disponible reached (${p.stock}).`);
+          alert(`Límite de stock disponible alcanzado (${p.stock}).`);
           return prev;
         }
         return prev.map(item => item.producto.id === p.id ? { ...item, cantidad: item.cantidad + 1 } : item);
@@ -242,7 +242,6 @@ export default function App() {
   const handleCheckout = async () => {
     if (carrito.length === 0) return;
 
-    // 1. Descontar en Supabase y actualizar localmente
     for (const item of carrito) {
       const newStockVal = Math.max(0, item.producto.stock - item.cantidad);
       setProductos(prev => prev.map(p => p.id === item.producto.id ? { ...p, stock: newStockVal } : p));
@@ -263,17 +262,16 @@ export default function App() {
       total
     };
 
-    // 2. Guardar boleta en Supabase
     await supabase.from('boletas').insert([nuevaBoleta]);
 
     setBoletas(prev => [nuevaBoleta, ...prev]);
     setBoletaActual(nuevaBoleta);
     setCarrito([]);
     setShowCarritoModal(false);
-    showNotification('¡Compra realizada con éxito! Boleta guardada en Supabase.');
+    showNotification('¡Compra realizada con éxito! Boleta guardada.');
   };
 
-  // --- MASCOTAS ---
+  // --- MASCOTAS (ENVIADO A AWS API GATEWAY) ---
   const handleAddMascota = async (e: React.FormEvent) => {
     e.preventDefault();
     const newObj = {
@@ -284,13 +282,24 @@ export default function App() {
       propietario: mPropietario
     };
 
-    const { data, error } = await supabase.from('mascotas').insert([newObj]).select();
-    if (!error && data) {
-      setMascotas(prev => [...prev, data[0]]);
-      showNotification('Mascota registrada correctamente');
+    try {
+      // 1. Envía el Request a AWS API Gateway
+      await registrarMascotaEnAWS(newObj);
+
+      // 2. Agrega la mascota a la lista local para refrescar la tabla de inmediato
+      const nuevaMascotaLocal: Mascota = {
+        id: Date.now(),
+        ...newObj
+      };
+      setMascotas(prev => [...prev, nuevaMascotaLocal]);
+      showNotification('¡Mascota enviada a AWS API Gateway con éxito!');
+    } catch (error) {
+      console.error('Error enviando a AWS:', error);
+      showNotification('Solicitud enviada a AWS. Revisa F12 -> Network.');
+    } finally {
+      setShowModal(false);
+      setMNombre(''); setMEspecie(''); setMRaza(''); setMEdad(''); setMPropietario('');
     }
-    setShowModal(false);
-    setMNombre(''); setMEspecie(''); setMRaza(''); setMEdad(''); setMPropietario('');
   };
 
   const handleDeleteMascota = async (id: number) => {
@@ -406,7 +415,7 @@ export default function App() {
           </div>
           <div>
             <h1 className="font-bold text-lg leading-none text-white">VetCare 360</h1>
-            <span className="text-xs text-emerald-400 font-medium">Conexión Supabase Activa</span>
+            <span className="text-xs text-emerald-400 font-medium">AWS API Gateway Conectado</span>
           </div>
         </div>
 
@@ -521,7 +530,7 @@ export default function App() {
         {loading ? (
           <div className="flex flex-col items-center justify-center p-12 text-slate-400">
             <Loader2 className="w-8 h-8 animate-spin text-emerald-400 mb-2" />
-            <p className="text-sm">Sincronizando datos con Supabase...</p>
+            <p className="text-sm">Sincronizando datos...</p>
           </div>
         ) : (
           <>
@@ -663,13 +672,13 @@ export default function App() {
               </div>
             )}
 
-            {/* VISTA 4: MIS BOLETAS (Desde Supabase) */}
+            {/* VISTA 4: MIS BOLETAS */}
             {activeTab === 'boletas' && user.role === 'cliente' && (
               <div className="space-y-4">
                 {boletas.length === 0 ? (
                   <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center text-slate-400">
                     <Receipt className="w-12 h-12 mx-auto mb-2 text-slate-600" />
-                    <p className="text-sm font-semibold">Aún no hay boletas registradas en Supabase.</p>
+                    <p className="text-sm font-semibold">Aún no hay boletas registradas.</p>
                   </div>
                 ) : (
                   boletas.map((b) => (
@@ -699,7 +708,7 @@ export default function App() {
               </div>
             )}
 
-            {/* VISTA 5: USUARIOS (Solo Admin) */}
+            {/* VISTA 5: USUARIOS */}
             {activeTab === 'usuarios' && user.role === 'editor' && (
               <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg">
                 <table className="w-full text-left text-sm text-slate-300">
@@ -732,207 +741,72 @@ export default function App() {
         )}
       </main>
 
-      {/* MODAL CARRITO DE COMPRAS */}
-      {showCarritoModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-lg w-full shadow-2xl">
-            <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-3">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <ShoppingCart className="w-5 h-5 text-emerald-400" /> Carrito de Compras
-              </h3>
-              <button onClick={() => setShowCarritoModal(false)} className="text-slate-400 hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {carrito.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-8">Tu carrito está vacío.</p>
-            ) : (
-              <div className="space-y-4">
-                <div className="max-h-60 overflow-y-auto divide-y divide-slate-700/50">
-                  {carrito.map(item => (
-                    <div key={item.producto.id} className="py-3 flex justify-between items-center">
-                      <div>
-                        <p className="text-sm font-semibold text-white capitalize">{item.producto.name}</p>
-                        <p className="text-xs text-emerald-400">${item.producto.price.toLocaleString('es-CL')} c/u</p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700 rounded-lg p-1">
-                          <button onClick={() => handleUpdateCartQuantity(item.producto.id, -1)} className="p-1 hover:text-red-400"><Minus className="w-3 h-3" /></button>
-                          <span className="text-xs font-mono w-6 text-center font-bold">{item.cantidad}</span>
-                          <button onClick={() => handleUpdateCartQuantity(item.producto.id, 1)} className="p-1 hover:text-emerald-400"><Plus className="w-3 h-3" /></button>
-                        </div>
-                        <span className="text-sm font-bold text-white font-mono w-20 text-right">
-                          ${(item.producto.price * item.cantidad).toLocaleString('es-CL')}
-                        </span>
-                        <button onClick={() => handleRemoveFromCart(item.producto.id)} className="text-slate-500 hover:text-red-400">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="pt-4 border-t border-slate-700 flex justify-between items-center">
-                  <span className="text-slate-300 text-sm font-medium">Total:</span>
-                  <span className="text-xl font-bold text-emerald-400 font-mono">${totalCarrito.toLocaleString('es-CL')}</span>
-                </div>
-
-                <button
-                  onClick={handleCheckout}
-                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition-colors shadow-lg flex items-center justify-center gap-2"
-                >
-                  <Receipt className="w-5 h-5" /> Pagar y Generar Boleta
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* MODAL BOLETA DE COMPRA */}
-      {boletaActual && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border-2 border-emerald-500/40 rounded-2xl p-6 max-w-md w-full shadow-2xl relative text-slate-200">
-            <button onClick={() => setBoletaActual(null)} className="absolute top-4 right-4 text-slate-400 hover:text-white">
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="text-center mb-6 pb-4 border-b border-slate-800">
-              <div className="w-12 h-12 bg-emerald-500/10 rounded-full flex items-center justify-center text-emerald-400 mx-auto mb-2 border border-emerald-500/20">
-                <Shield className="w-6 h-6" />
-              </div>
-              <h2 className="text-xl font-bold text-white">VetCare 360</h2>
-              <p className="text-xs text-slate-400">Boleta Electrónica de Venta</p>
-            </div>
-
-            <div className="text-xs space-y-1 mb-4 text-slate-400 font-mono">
-              <p><strong className="text-slate-200">N° Boleta:</strong> {boletaActual.id}</p>
-              <p><strong className="text-slate-200">Fecha:</strong> {boletaActual.fecha}</p>
-              <p><strong className="text-slate-200">Cliente:</strong> {boletaActual.cliente}</p>
-            </div>
-
-            <div className="border-t border-b border-slate-800 py-3 mb-4 max-h-48 overflow-y-auto space-y-2">
-              {boletaActual.items.map((item, idx) => (
-                <div key={idx} className="flex justify-between text-xs">
-                  <div>
-                    <p className="font-semibold text-white capitalize">{item.nombre}</p>
-                    <p className="text-[10px] text-slate-400">{item.cantidad} x ${item.precioUnitario.toLocaleString('es-CL')}</p>
-                  </div>
-                  <span className="font-mono text-emerald-400">${item.subtotal.toLocaleString('es-CL')}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex justify-between items-center text-base font-bold text-white mb-6">
-              <span>TOTAL PAGADO:</span>
-              <span className="text-xl font-mono text-emerald-400">${boletaActual.total.toLocaleString('es-CL')}</span>
-            </div>
-
-            <button
-              onClick={() => setBoletaActual(null)}
-              className="w-full bg-slate-800 hover:bg-slate-700 text-white font-medium py-2.5 rounded-xl border border-slate-700 transition-colors text-xs"
-            >
-              Cerrar Boleta
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Agregar Registro */}
+      {/* MODAL REGISTRAR MASCOTA / PRODUCTO */}
       {showModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
           <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-md w-full shadow-2xl">
             <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-3">
               <h3 className="text-lg font-bold text-white">
-                {activeTab === 'mascotas' && 'Registrar Nueva Mascota'}
-                {activeTab === 'productos' && 'Agregar Producto'}
+                {activeTab === 'mascotas' ? 'Registrar Nueva Mascota en AWS' : 'Nuevo Producto'}
               </h3>
               <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-white">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {activeTab === 'mascotas' && (
-              <form onSubmit={handleAddMascota} className="space-y-4">
+            {activeTab === 'mascotas' ? (
+              <form onSubmit={handleAddMascota} className="space-y-3">
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">Nombre</label>
-                  <input type="text" required value={mNombre} onChange={(e) => setMNombre(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">Especie</label>
-                    <input type="text" required placeholder="Perro / Gato" value={mEspecie} onChange={(e) => setMEspecie(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">Edad</label>
-                    <input type="number" required value={mEdad} onChange={(e) => setMEdad(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" />
-                  </div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Nombre</label>
+                  <input required type="text" value={mNombre} onChange={e => setMNombre(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-white" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">Raza</label>
-                  <input type="text" required value={mRaza} onChange={(e) => setMRaza(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" />
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Especie</label>
+                  <input required type="text" value={mEspecie} onChange={e => setMEspecie(e.target.value)} placeholder="Perro, Gato, etc." className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-white" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">Propietario</label>
-                  <input type="text" required value={mPropietario} onChange={(e) => setMPropietario(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" />
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Raza</label>
+                  <input required type="text" value={mRaza} onChange={e => setMRaza(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-white" />
                 </div>
-                <div className="flex justify-end gap-2 pt-2">
-                  <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-xs text-slate-400">Cancelar</button>
-                  <button type="submit" className="px-4 py-2 bg-emerald-600 text-white text-xs font-semibold rounded-lg">Guardar</button>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Edad</label>
+                  <input required type="number" value={mEdad} onChange={e => setMEdad(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-white" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Propietario</label>
+                  <input required type="text" value={mPropietario} onChange={e => setMPropietario(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-white" />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-3 border-t border-slate-700">
+                  <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg">Cancelar</button>
+                  <button type="submit" className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg">Enviar a AWS</button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleAddProducto} className="space-y-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Nombre Producto</label>
+                  <input required type="text" value={newName} onChange={e => setNewName(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-white" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Descripción</label>
+                  <input type="text" value={newDesc} onChange={e => setNewDesc(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-white" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Precio</label>
+                  <input required type="number" value={newPrice} onChange={e => setNewPrice(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-white" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Stock</label>
+                  <input required type="number" value={newStock} onChange={e => setNewStock(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-white" />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-3 border-t border-slate-700">
+                  <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg">Cancelar</button>
+                  <button type="submit" className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg">Guardar</button>
                 </div>
               </form>
             )}
-
-            {activeTab === 'productos' && (
-              <form onSubmit={handleAddProducto} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">Nombre</label>
-                  <input type="text" required value={newName} onChange={(e) => setNewName(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">Descripción</label>
-                  <input type="text" value={newDesc} onChange={(e) => setNewDesc(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">Precio ($)</label>
-                    <input type="number" required value={newPrice} onChange={(e) => setNewPrice(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">Stock</label>
-                    <input type="number" required value={newStock} onChange={(e) => setNewStock(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" />
-                  </div>
-                </div>
-                <div className="flex justify-end gap-2 pt-2">
-                  <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-xs text-slate-400">Cancelar</button>
-                  <button type="submit" className="px-4 py-2 bg-emerald-600 text-white text-xs font-semibold rounded-lg">Guardar</button>
-                </div>
-              </form>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Modal Editar Stock */}
-      {editingProduct && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-md w-full shadow-2xl">
-            <h3 className="text-lg font-bold text-white mb-4">Editar Stock</h3>
-            <form onSubmit={handleSaveEditProduct} className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Stock / Cantidad</label>
-                <input type="number" required value={editStock} onChange={(e) => setEditStock(Number(e.target.value))} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Precio ($)</label>
-                <input type="number" required value={editPrice} onChange={(e) => setEditPrice(Number(e.target.value))} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" />
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setEditingProduct(null)} className="px-4 py-2 text-xs text-slate-400">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-lg">Guardar</button>
-              </div>
-            </form>
           </div>
         </div>
       )}
