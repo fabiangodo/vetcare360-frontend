@@ -1,47 +1,56 @@
 # 💻 VetCare 360 - Single Page Application Frontend (React + TypeScript)
 
 ## 📌 Contexto General del Proyecto
-**VetCare 360** es el cliente web que permite la interacción de distintos tipos de usuarios (`Admin`, `Veterinario` y `Cliente`). Proporciona una interfaz intuitiva con autenticación centralizada gestionada por **AWS Cognito**, consumo de servicios REST protegidos en Spring Boot y persistencia en tiempo real sobre PostgreSQL (Supabase).
+VetCare 360 es una solución web integral para la gestión de clínicas veterinarias. Permite la interacción diferenciada según el perfil del usuario (**Administrador**, **Veterinario** y **Cliente**). Ofrece una interfaz moderna, reactiva y persistencia de datos en tiempo real mediante integración directa con **Supabase (PostgreSQL)** y despliegue continuo en **Vercel**.
 
 ---
 
 ## 🛠️ Tecnologías Utilizadas
-* **Framework & Tooling:** React + TypeScript + Vite
-* **Autenticación OIDC:** `react-oidc-context` (OAuth 2.0 / OpenID Connect)
-* **Hosting / Despliegue Local:** Node.js (Vite Dev Server en puerto `5173`)
-* **Integración:** Fetch API con inyección de tokens de acceso JWT
+- **Framework & Tooling:** React 18 + TypeScript + Vite
+- **Diseño & Estilos:** Tailwind CSS, Lucide React (Iconografía)
+- **Base de Datos & Backend:** Supabase (`@supabase/supabase-js`) con API REST y JWT de acceso
+- **Hosting / Despliegue Continuo:** Vercel (CI/CD sincronizado con GitHub)
 
 ---
 
-## 🔍 Lo que hicimos en el Frontend (Paso a Paso)
+## 🔍 Módulos e Integración de la Aplicación (Paso a Paso)
 
-### 1. Configuración del Proveedor OIDC (`main.tsx`)
-* Configuramos el `AuthProvider` conectándolo directamente al **User Pool de AWS Cognito** (`us-east-1_Gz8tIv6dd`).
-* Definimos los parámetros OIDC (`authority`, `client_id`, `redirect_uri` y `response_type: "code"`).
-* Configuramos el parámetro `post_logout_redirect_uri` para soportar la redirección tras el cierre de sesión hacia Cognito Hosted UI.
+### 1. Control de Acceso Basado en Roles (RBAC) y Sesión
+- **Gestión de Perfiles:** Autenticación local persistente (`localStorage`) mapeada con perfiles definidos en la base de datos (`usuarios`).
+- **Vista Administrador (`editor`):** Acceso total para crear, editar y eliminar registros en todas las tablas, incluyendo la pestaña exclusiva de **Cuentas Registradas**.
+- **Vista Veterinario (`veterinario`):** Gestión de mascotas, visualización de citas médicas y modificación/actualización de stock e inventario.
+- **Vista Cliente (`cliente`):** Consulta del catálogo, uso del **Carrito de Compras** interactivo, descuento de stock y consulta de **Boletas Electrónicas**.
 
-### 2. Gestión de Sesión y Dashboard (`App.tsx`)
-* **Redirección Hosted UI:** Si el usuario no está autenticado, la SPA lo redirige a la interfaz hosted de Cognito.
-* **Extracción de Roles:** Al autenticarse, leemos el perfil del usuario (`auth.user?.profile`) y extraemos dinámicamente los grupos asignados (`cognito:groups`) para determinar permisos de UI (`isAdmin`, `isVet`).
-* **Mapeo de Datos:** Implementamos lógica de mapeo entre el contrato JSON del backend (`name`, `description`, `price`, `stock`) y el estado interno del componente React (`nombre`, `descripcion`, `precio`, `stock`).
-* **Gestión de Productos (CRUD):**
-  * **Listar (`GET /api/productos`):** Carga automática al autenticarse.
-  * **Crear (`POST /api/productos`):** Formulario dinámico habilitado para roles `Veterinario` y `Admin`.
-  * **Eliminar (`DELETE /api/productos/{id}`):** Acción de borrado directo reservada exclusivamente para el rol `Admin`.
-* **Cierre de Sesión Federado:** Destruye los tokens locales con `auth.removeUser()` e invalida la sesión central en Cognito (`/logout`).
+### 2. Módulos y Tablas Sincronizadas (CRUD en Supabase)
+- **Mascotas (`public.mascotas`):** Registro, consulta de ficha y eliminación de animales inscritos (`nombre`, `especie`, `raza`, `edad`, `propietario`).
+- **Citas Médicas (`public.citas`):** Consulta del cronograma de atenciones veterinarias (`mascota`, `propietario`, `fecha`, `hora`, `motivo`).
+- **Productos e Inventario (`public.products`):** Control de catálogo (`name`, `description`, `price`, `stock`).
+- **Carrito & Boletas (`public.boletas`):** Procesamiento de compras para clientes con cálculo de total, actualización dinámica de stock e inserción de la boleta electrónica con formato JSON.
+- **Cuentas Registradas (`public.usuarios`):** Panel exclusivo de administración para la auditoría de accesos (`nombre`, `email`, `rol`).
 
----
-
-## 🔗 Conexión con el Backend y AWS
-1. **Variables de Entorno y Base URL:** Apuntamos las solicitudes hacia la ruta con stage de AWS API Gateway:
-   `https://oepttvmqv2.execute-api.us-east-1.amazonaws.com/prod`
-2. **Flujo Integrado Completo:** 
-   `React App` $\rightarrow$ `Cognito (Obtener Access Token)` $\rightarrow$ `Fetch con Authorization: Bearer` $\rightarrow$ `AWS API Gateway (/prod/api/...)` $\rightarrow$ `Spring Boot Backend (EC2)` $\rightarrow$ `Supabase PostgreSQL`.
+### 3. Arquitectura Directa con Supabase
+- Para garantizar un tiempo de respuesta óptimo y disponibilidad continua en la evaluación, la conexión se realiza directamente mediante `@supabase/supabase-js` utilizando credenciales JWT seguras (`anon key`).
+- **Flujo Integrado:** React SPA (Vercel) ↔ API REST Directa ↔ Supabase PostgreSQL Cloud.
 
 ---
 
-## 🧪 Pruebas de Interfaz y Seguridad
-* **Autenticación Cliente:** Login con `cliente.prueba@duocuc.cl` carga el catálogo pero muestra restricción de acceso en funciones médicas o de modificación.
-* **Autenticación Veterinario:** Login con `vet.prueba@duocuc.cl` muestra los roles asignados, habilita la consulta de Fichas Médicas y el formulario para agregar productos a la base de datos.
-* **Autenticación Admin:** Habilita el control total, incluyendo el botón para eliminar registros de productos mediante peticiones `DELETE`.
-* **Persistencia:** Todos los productos creados o eliminados desde la interfaz impactan directamente en la tabla `products` de Supabase.
+## 👥 Perfiles y Credenciales de Prueba
+
+| Perfil | Correo Electrónico | Permisos |
+| :--- | :--- | :--- |
+| **Administrador** | `admin@test.com` | Control total (CRUD) + Menú exclusivo de Usuarios. |
+| **Veterinario** | `editor@test.com` | Crear mascotas/productos y editar stock/precios. |
+| **Cliente** | `viewer@test.com` | Navegación, uso de Carrito, pago de boletas y consulta de historial. |
+
+---
+
+## 🧪 Pruebas de Interfaz y Persistencia
+- **Autenticación Cliente:** `viewer@test.com` agrega productos al carrito, procesa el pago, descuenta unidades de la tabla `products` y genera un registro persistente en `boletas`.
+- **Autenticación Veterinario:** `editor@test.com` accede con el nombre `usuario_veterinario`, permite inscribir mascotas y modificar stock.
+- **Autenticación Admin:** `admin@test.com` habilita la eliminación de registros y la auditoría de la tabla `usuarios`.
+- **Persistencia en la Nube:** Todas las acciones modifican la base de datos en tiempo real y son auditables desde la pestaña *Network* de DevTools (respuestas HTTP `200`, `201` y `204`).
+
+---
+
+## 🌐 Producción
+- **URL Desplegada en Vercel:** [vetcare360-frontend-b2ze.vercel.app](https://vetcare360-frontend-b2ze.vercel.app/)
