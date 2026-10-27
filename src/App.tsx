@@ -10,7 +10,9 @@ import {
   Trash2, 
   UserCheck,
   X,
-  Edit3
+  Edit3,
+  ShoppingCart,
+  CheckCircle2
 } from 'lucide-react';
 
 type Role = 'editor' | 'veterinario' | 'cliente';
@@ -56,20 +58,28 @@ export default function App() {
   const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState('');
 
-  const [tab, setTab] = useState<'mascotas' | 'citas' | 'productos' | 'usuarios'>('mascotas');
+  const [tab, setTab] = useState<'mascotas' | 'citas' | 'productos' | 'usuarios'>('productos');
 
   const [mascotas, setMascotas] = useState<Mascota[]>([]);
   const [citas, setCitas] = useState<Cita[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
 
-  // Modales
+  // Modal para agregar producto
   const [showProductModal, setShowProductModal] = useState(false);
   const [newName, setNewName] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [newPrice, setNewPrice] = useState('');
   const [newStock, setNewStock] = useState('');
 
-  // Cargar datos desde la base de datos (Backend Spring Boot)
+  // Modal para editar stock/producto
+  const [editingProduct, setEditingProduct] = useState<Producto | null>(null);
+  const [editPrice, setEditPrice] = useState<number>(0);
+  const [editStock, setEditStock] = useState<number>(0);
+
+  // Mensajes de confirmación de compra
+  const [purchaseSuccess, setPurchaseSuccess] = useState<string | null>(null);
+
+  // Cargar datos desde el Backend / Supabase
   const loadData = async () => {
     try {
       const resMascotas = await fetch(`${API_BASE_URL}/mascotas`);
@@ -81,8 +91,7 @@ export default function App() {
       const resProducts = await fetch(`${API_BASE_URL}/products`);
       if (resProducts.ok) setProductos(await resProducts.json());
     } catch (error) {
-      console.warn("Backend no disponible temporalmente, cargando datos guardados...");
-      // Datos de respaldo iniciales basados en Supabase
+      console.warn("Backend no disponible temporalmente, usando respaldo local.");
       setMascotas([
         { id: 1, nombre: 'Max', especie: 'Perro', raza: 'Golden Retriever', edad: 3, propietario: 'Carlos Pérez' },
         { id: 2, nombre: 'Luna', especie: 'Gato', raza: 'Siamés', edad: 2, propietario: 'Carlos Pérez' },
@@ -153,7 +162,7 @@ export default function App() {
     localStorage.removeItem('vetcare_user');
   };
 
-  // Agregar Producto a la Base de Datos
+  // 1. Agregar nuevo producto
   const handleAddProducto = async (e: React.FormEvent) => {
     e.preventDefault();
     if (user?.role === 'cliente') {
@@ -191,7 +200,64 @@ export default function App() {
     setNewStock('');
   };
 
-  // Eliminar Producto de la Base de Datos
+  // 2. Editar stock y precio del producto
+  const handleOpenEdit = (p: Producto) => {
+    setEditingProduct(p);
+    setEditPrice(p.price);
+    setEditStock(p.stock);
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProduct) return;
+
+    const updatedProd = {
+      ...editingProduct,
+      price: editPrice,
+      stock: editStock
+    };
+
+    try {
+      await fetch(`${API_BASE_URL}/products/${editingProduct.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedProd)
+      });
+    } catch (e) {
+      console.log('Modificado localmente');
+    }
+
+    setProductos(productos.map(p => p.id === editingProduct.id ? updatedProd : p));
+    setEditingProduct(null);
+  };
+
+  // 3. Función para Comprar Producto (Disponible para Cliente / Todos)
+  const handleBuyProduct = async (p: Producto) => {
+    if (p.stock <= 0) {
+      alert('Producto agotado sin stock disponible.');
+      return;
+    }
+
+    const updatedStock = p.stock - 1;
+    const updatedProd = { ...p, stock: updatedStock };
+
+    try {
+      await fetch(`${API_BASE_URL}/products/${p.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedProd)
+      });
+    } catch (e) {
+      console.log('Compra procesada localmente');
+    }
+
+    setProductos(productos.map(item => item.id === p.id ? updatedProd : item));
+    
+    setPurchaseSuccess(`¡Compra realizada con éxito! Compraste: ${p.name} por $${p.price.toLocaleString('es-CL')}`);
+    setTimeout(() => setPurchaseSuccess(null), 4000);
+  };
+
+  // 4. Eliminar Producto (Solo Editor)
   const handleDeleteProducto = async (id: number) => {
     if (user?.role !== 'editor') {
       alert('Acceso Denegado: Solo el perfil Editor (admin@test.com) puede eliminar productos.');
@@ -274,6 +340,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
+      {/* Header */}
       <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-400 border border-emerald-500/20">
@@ -302,7 +369,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* Navegación por Pestañas Completa */}
+      {/* Navegación por Pestañas */}
       <nav className="bg-slate-900/50 border-b border-slate-800/80 px-6 flex gap-2 overflow-x-auto">
         <button
           onClick={() => setTab('mascotas')}
@@ -343,16 +410,25 @@ export default function App() {
         )}
       </nav>
 
-      {/* Contenido */}
+      {/* Contenido Principal */}
       <main className="flex-1 p-6 max-w-7xl w-full mx-auto">
+        
+        {/* Notificación de compra */}
+        {purchaseSuccess && (
+          <div className="mb-4 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center gap-3 text-emerald-400 animate-fade-in">
+            <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+            <p className="text-sm font-semibold">{purchaseSuccess}</p>
+          </div>
+        )}
+
         <div className="mb-6 p-4 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <UserCheck className="w-5 h-5 text-emerald-400" />
             <p className="text-sm text-slate-300">
               Conectado como <strong className="text-white">{user.email}</strong>. 
-              {user.role === 'editor' && ' Permisos totales de edición y eliminación activados.'}
-              {user.role === 'veterinario' && ' Permisos de gestión clínica activados.'}
-              {user.role === 'cliente' && ' Modo lectura activado.'}
+              {user.role === 'editor' && ' Puedes editar, agregar y eliminar productos.'}
+              {user.role === 'veterinario' && ' Puedes editar stock y agregar insumos.'}
+              {user.role === 'cliente' && ' Haz clic en "Comprar" para adquirir insumos o productos.'}
             </p>
           </div>
 
@@ -445,7 +521,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 3: PRODUCTOS */}
+        {/* TAB 3: PRODUCTOS E INVENTARIO */}
         {tab === 'productos' && (
           <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg">
             <table className="w-full text-left text-sm text-slate-300">
@@ -467,20 +543,52 @@ export default function App() {
                     <td className="p-4 text-slate-400">{p.description}</td>
                     <td className="p-4 text-emerald-400 font-medium">${p.price.toLocaleString('es-CL')}</td>
                     <td className="p-4">
-                      <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-slate-800 text-slate-300">
-                        {p.stock} un.
+                      <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
+                        p.stock === 0 ? 'bg-red-500/20 text-red-400 border border-red-500/30' :
+                        p.stock <= 5 ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
+                        'bg-slate-800 text-slate-300 border border-slate-700'
+                      }`}>
+                        {p.stock === 0 ? 'Agotado' : `${p.stock} un.`}
                       </span>
                     </td>
                     <td className="p-4 text-right">
-                      {user.role === 'editor' && (
-                        <button 
-                          onClick={() => handleDeleteProducto(p.id)}
-                          title="Eliminar de Supabase" 
-                          className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-red-400 rounded-lg"
+                      <div className="flex items-center justify-end gap-2">
+                        {/* Botón Comprar para Clientes y Usuarios */}
+                        <button
+                          onClick={() => handleBuyProduct(p)}
+                          disabled={p.stock === 0}
+                          title="Comprar Producto"
+                          className={`flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg transition-colors ${
+                            p.stock === 0 
+                              ? 'bg-slate-800 text-slate-600 cursor-not-allowed'
+                              : 'bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-500/30'
+                          }`}
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <ShoppingCart className="w-3.5 h-3.5" /> Comprar
                         </button>
-                      )}
+
+                        {/* Botón Editar Cantidades/Stock para Veterinarios/Editor */}
+                        {user.role !== 'cliente' && (
+                          <button
+                            onClick={() => handleOpenEdit(p)}
+                            title="Editar Stock y Precio"
+                            className="p-1.5 bg-slate-800 hover:bg-blue-600/20 text-slate-400 hover:text-blue-400 border border-slate-700 rounded-lg transition-colors"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+                        )}
+
+                        {/* Botón Eliminar solo para Editor */}
+                        {user.role === 'editor' && (
+                          <button 
+                            onClick={() => handleDeleteProducto(p.id)}
+                            title="Eliminar de Supabase" 
+                            className="p-1.5 bg-slate-800 hover:bg-red-600/20 text-slate-400 hover:text-red-400 border border-slate-700 rounded-lg transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -517,7 +625,7 @@ export default function App() {
 
       </main>
 
-      {/* Modal para agregar producto */}
+      {/* Modal 1: Agregar Producto */}
       {showProductModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
           <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-md w-full shadow-2xl">
@@ -594,6 +702,68 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Modal 2: Editar Cantidades / Stock y Precio */}
+      {editingProduct && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-md w-full shadow-2xl">
+            <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-3">
+              <h3 className="text-lg font-bold text-white">Editar Stock y Precio</h3>
+              <button onClick={() => setEditingProduct(null)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="space-y-4">
+              <div>
+                <p className="text-xs text-slate-400 uppercase font-semibold">Producto</p>
+                <p className="text-base font-bold text-white capitalize">{editingProduct.name}</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Cantidad / Stock Disponible</label>
+                <input 
+                  type="number" 
+                  required 
+                  min="0"
+                  value={editStock} 
+                  onChange={(e) => setEditStock(Number(e.target.value))} 
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Precio ($)</label>
+                <input 
+                  type="number" 
+                  required 
+                  min="0"
+                  value={editPrice} 
+                  onChange={(e) => setEditPrice(Number(e.target.value))} 
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button 
+                  type="button" 
+                  onClick={() => setEditingProduct(null)} 
+                  className="px-4 py-2 text-xs text-slate-400 hover:text-white"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit" 
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg"
+                >
+                  Actualizar Datos
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
