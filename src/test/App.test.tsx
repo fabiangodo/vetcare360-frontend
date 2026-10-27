@@ -32,7 +32,7 @@ describe('VetCare 360 - Tests de Integración', () => {
     fireEvent.change(emailInput, { target: { value: 'admin@test.com' } });
     fireEvent.submit(submitBtn.closest('form')!);
 
-    // Espera a que el panel autenticado sincronice con Supabase o cargue los datos
-    expect(await screen.findByText(/Sincronizando datos con Supabase|Registrar Mascota/i)).toBeInTheDocument();
+    // Busca un elemento único de la sesión autenticada (el botón de cerrar sesión o el usuario activo)
+    expect(await screen.findByTitle(/cerrar sesión/i)).toBeInTheDocument();
   });
 });
