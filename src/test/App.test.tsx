@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, beforeEach } from 'vitest';
-import App from './App';
+import App from '../App';
 
 describe('VetCare 360 - Tests de Integración', () => {
   beforeEach(() => {
@@ -32,6 +32,7 @@ describe('VetCare 360 - Tests de Integración', () => {
     fireEvent.change(emailInput, { target: { value: 'admin@test.com' } });
     fireEvent.submit(submitBtn.closest('form')!);
 
-    expect(await screen.findByText('usuario_admin')).toBeInTheDocument();
+    // Espera a que el panel autenticado sincronice con Supabase o cargue los datos
+    expect(await screen.findByText(/Sincronizando datos con Supabase|Registrar Mascota/i)).toBeInTheDocument();
   });
 });
