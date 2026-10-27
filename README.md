@@ -16,7 +16,6 @@ VetCare 360 es una solución web integral para la gestión de clínicas veterina
 ## 🔍 Módulos e Integración de la Aplicación (Paso a Paso)
 
 ### 1. Control de Acceso Basado en Roles (RBAC) y Sesión
-- **Gestión de Perfiles:** Autenticación local persistente (`localStorage`) mapeada con perfiles definidos en la base de datos (`usuarios`).
 - **Vista Administrador (`editor`):** Acceso total para crear, editar y eliminar registros en todas las tablas, incluyendo la pestaña exclusiva de **Cuentas Registradas**.
 - **Vista Veterinario (`veterinario`):** Gestión de mascotas, visualización de citas médicas y modificación/actualización de stock e inventario.
 - **Vista Cliente (`cliente`):** Consulta del catálogo, uso del **Carrito de Compras** interactivo, descuento de stock y consulta de **Boletas Electrónicas**.
