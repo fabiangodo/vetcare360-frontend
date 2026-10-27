@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { createClient } from '@supabase/supabase-js';
 import { 
   Shield, 
-  Users, 
-  Calendar, 
-  Dog, 
   Package, 
   LogOut, 
   Plus, 
@@ -12,8 +10,14 @@ import {
   X,
   Edit3,
   ShoppingCart,
-  CheckCircle2
+  CheckCircle2,
+  Loader2
 } from 'lucide-react';
+
+// Cliente directo a Supabase
+const supabaseUrl = 'https://ptrkxumyvnwecrnhfigr.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB0cmt4dW15dm53ZWNybmhmaWdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mjk5NjY4MDMsImV4cCI6MjA0NTU0MjgwM30.4i4kUSs9N7mFj2a-430z4O17p7G1yS2vD0A0E0X0X0X0'; 
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 type Role = 'editor' | 'veterinario' | 'cliente';
 
@@ -31,25 +35,14 @@ interface Producto {
   stock: number;
 }
 
-// Endpoint de AWS EC2 para la evaluación
-const AWS_API_URL = 'http://54.226.33.64:8080/api/products';
-
-const DEFAULT_PRODUCTS: Producto[] = [
-  { id: 1, name: 'vacunas', description: 'Sin descripción', price: 7500, stock: 10 },
-  { id: 2, name: 'Alimento para gato', description: 'Sin descripción', price: 25000, stock: 5 },
-  { id: 3, name: 'Alimento para perro', description: 'Sin descripción', price: 25000, stock: 5 },
-  { id: 4, name: 'churu', description: 'Sin descripción', price: 1000, stock: 25 },
-  { id: 5, name: 'arena para gato', description: 'Sin descripción', price: 8990, stock: 10 }
-];
-
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState('');
 
-  const [tab, setTab] = useState<'productos'>('productos');
-  const [productos, setProductos] = useState<Producto[]>(DEFAULT_PRODUCTS);
+  const [productos, setProductos] = useState<Producto[]>([]);
+  const [loading, setLoading] = useState(false);
 
   // Modales
   const [showProductModal, setShowProductModal] = useState(false);
@@ -64,22 +57,18 @@ export default function App() {
 
   const [purchaseSuccess, setPurchaseSuccess] = useState<string | null>(null);
 
-  // Función para disparar la petición HTTP hacia AWS que el profe verá en F12 -> Network
-  const sendAwsRequest = async (url: string, method: string, body?: any) => {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 1200); // Corta en 1.2s para evitar lentitud
+  // Cargar productos directamente desde Supabase
+  const fetchProductos = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .order('id', { ascending: true });
 
-      await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: body ? JSON.stringify(body) : undefined,
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-    } catch (e) {
-      console.log(`Petición AWS (${method}) registrada en consola/F12`);
+    if (!error && data) {
+      setProductos(data);
     }
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -95,8 +84,7 @@ export default function App() {
 
   useEffect(() => {
     if (user) {
-      // Intenta cargar desde AWS al iniciar
-      sendAwsRequest(AWS_API_URL, 'GET');
+      fetchProductos();
     }
   }, [user]);
 
@@ -133,77 +121,72 @@ export default function App() {
     localStorage.removeItem('vetcare_user');
   };
 
-  // 1. EDITAR STOCK (Envía petición PUT a AWS + UI Instantánea)
-  const handleSaveEdit = (e: React.FormEvent) => {
+  // Guardar Edición (Persiste en Supabase)
+  const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingProduct) return;
 
-    const updatedProd: Producto = {
-      ...editingProduct,
-      price: editPrice,
-      stock: editStock
-    };
-
-    // Cambia la pantalla de inmediato
-    setProductos(prev => prev.map(p => p.id === editingProduct.id ? updatedProd : p));
+    setProductos(prev => prev.map(p => p.id === editingProduct.id ? { ...p, stock: editStock, price: editPrice } : p));
     setEditingProduct(null);
 
-    // Muestra la petición consumiendo AWS en la pestaña F12 -> Network
-    sendAwsRequest(`${AWS_API_URL}/${editingProduct.id}`, 'PUT', updatedProd);
+    await supabase
+      .from('products')
+      .update({ stock: editStock, price: editPrice })
+      .eq('id', editingProduct.id);
   };
 
-  // 2. COMPRAR PRODUCTO (Envía petición PUT a AWS + Descuenta Stock de inmediato)
-  const handleBuyProduct = (p: Producto) => {
+  // Comprar (Descuenta en Supabase)
+  const handleBuyProduct = async (p: Producto) => {
     if (p.stock <= 0) {
-      alert('Producto agotado sin stock.');
+      alert('Producto agotado.');
       return;
     }
 
-    const updatedProd: Producto = { ...p, stock: p.stock - 1 };
+    const newStockVal = p.stock - 1;
+    setProductos(prev => prev.map(item => item.id === p.id ? { ...item, stock: newStockVal } : item));
+    setPurchaseSuccess(`Compraste: ${p.name}`);
+    setTimeout(() => setPurchaseSuccess(null), 3000);
 
-    // Descuenta en pantalla al instante
-    setProductos(prev => prev.map(item => item.id === p.id ? updatedProd : item));
-    setPurchaseSuccess(`¡Compra realizada! Compraste: ${p.name}`);
-    setTimeout(() => setPurchaseSuccess(null), 3500);
-
-    // Dispara consumo a AWS
-    sendAwsRequest(`${AWS_API_URL}/${p.id}`, 'PUT', updatedProd);
+    await supabase
+      .from('products')
+      .update({ stock: newStockVal })
+      .eq('id', p.id);
   };
 
-  // 3. AGREGAR PRODUCTO (POST a AWS)
-  const handleAddProducto = (e: React.FormEvent) => {
+  // Agregar a Supabase
+  const handleAddProducto = async (e: React.FormEvent) => {
     e.preventDefault();
     if (user?.role === 'cliente') return;
 
-    const newProd: Producto = {
-      id: Date.now(),
-      name: newName,
-      description: newDesc || 'Sin descripción',
-      price: Number(newPrice),
-      stock: Number(newStock)
-    };
+    const { data } = await supabase
+      .from('products')
+      .insert([
+        { name: newName, description: newDesc || 'Sin descripción', price: Number(newPrice), stock: Number(newStock) }
+      ])
+      .select();
 
-    setProductos(prev => [...prev, newProd]);
+    if (data && data.length > 0) {
+      setProductos(prev => [...prev, data[0]]);
+    }
+
     setShowProductModal(false);
     setNewName('');
     setNewDesc('');
     setNewPrice('');
     setNewStock('');
-
-    sendAwsRequest(AWS_API_URL, 'POST', newProd);
   };
 
-  // 4. ELIMINAR PRODUCTO (DELETE a AWS)
-  const handleDeleteProducto = (id: number) => {
+  // Eliminar de Supabase
+  const handleDeleteProducto = async (id: number) => {
     if (user?.role !== 'editor') {
-      alert('Acceso Denegado: Solo el perfil Editor puede eliminar productos.');
+      alert('Solo el perfil Editor puede eliminar productos.');
       return;
     }
 
     if (!confirm('¿Estás seguro de eliminar este producto?')) return;
 
     setProductos(prev => prev.filter(p => p.id !== id));
-    sendAwsRequest(`${AWS_API_URL}/${id}`, 'DELETE');
+    await supabase.from('products').delete().eq('id', id);
   };
 
   if (!user) {
@@ -257,7 +240,7 @@ export default function App() {
           </form>
 
           <div className="mt-8 pt-6 border-t border-slate-700/50 text-xs text-slate-400">
-            <p className="font-semibold text-slate-300 mb-2">Cuentas de prueba disponibles:</p>
+            <p className="font-semibold text-slate-300 mb-2">Cuentas de prueba:</p>
             <ul className="space-y-1 font-mono text-[11px]">
               <li><strong className="text-emerald-400">Editor:</strong> admin@test.com</li>
               <li><strong className="text-emerald-400">Veterinario:</strong> editor@test.com</li>
@@ -278,18 +261,14 @@ export default function App() {
           </div>
           <div>
             <h1 className="font-bold text-lg leading-none text-white">VetCare 360</h1>
-            <span className="text-xs text-emerald-400 font-medium">Integración AWS EC2 / REST API</span>
+            <span className="text-xs text-emerald-400 font-medium">Conexión Supabase Activa</span>
           </div>
         </div>
 
         <div className="flex items-center gap-4">
           <div className="text-right hidden sm:block">
             <p className="text-sm font-medium text-white">{user.nombre}</p>
-            <span className={`inline-block px-2 py-0.5 text-[10px] font-bold rounded-full uppercase tracking-wider ${
-              user.role === 'editor' ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' :
-              user.role === 'veterinario' ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' :
-              'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-            }`}>
+            <span className="inline-block px-2 py-0.5 text-[10px] font-bold rounded-full uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
               Rol: {user.role}
             </span>
           </div>
@@ -298,15 +277,6 @@ export default function App() {
           </button>
         </div>
       </header>
-
-      <nav className="bg-slate-900/50 border-b border-slate-800/80 px-6 flex gap-2 overflow-x-auto">
-        <button
-          onClick={() => setTab('productos')}
-          className="flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 border-emerald-500 text-emerald-400 bg-emerald-500/5"
-        >
-          <Package className="w-4 h-4" /> Productos e Inventario
-        </button>
-      </nav>
 
       <main className="flex-1 p-6 max-w-7xl w-full mx-auto">
         {purchaseSuccess && (
@@ -321,9 +291,9 @@ export default function App() {
             <UserCheck className="w-5 h-5 text-emerald-400" />
             <p className="text-sm text-slate-300">
               Conectado como <strong className="text-white">{user.email}</strong>. 
-              {user.role === 'editor' && ' Permisos completos de gestión.'}
+              {user.role === 'editor' && ' Permisos totales activados.'}
               {user.role === 'veterinario' && ' Edición de stock activada.'}
-              {user.role === 'cliente' && ' Modo cliente: Comprar insumos.'}
+              {user.role === 'cliente' && ' Haz clic en "Comprar" para descontar stock.'}
             </p>
           </div>
 
@@ -337,149 +307,118 @@ export default function App() {
           )}
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg">
-          <table className="w-full text-left text-sm text-slate-300">
-            <thead className="bg-slate-800/60 text-slate-400 text-xs uppercase tracking-wider border-b border-slate-800">
-              <tr>
-                <th className="p-4">ID</th>
-                <th className="p-4">Nombre Producto</th>
-                <th className="p-4">Descripción</th>
-                <th className="p-4">Precio</th>
-                <th className="p-4">Stock</th>
-                <th className="p-4 text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800">
-              {productos.map((p) => (
-                <tr key={p.id} className="hover:bg-slate-800/30 transition-colors">
-                  <td className="p-4 font-mono text-xs text-slate-500">#{p.id}</td>
-                  <td className="p-4 font-semibold text-white capitalize">{p.name}</td>
-                  <td className="p-4 text-slate-400">{p.description}</td>
-                  <td className="p-4 text-emerald-400 font-medium">${p.price.toLocaleString('es-CL')}</td>
-                  <td className="p-4">
-                    <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
-                      p.stock === 0 ? 'bg-red-500/20 text-red-400 border border-red-500/30' :
-                      p.stock <= 5 ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
-                      'bg-slate-800 text-slate-300 border border-slate-700'
-                    }`}>
-                      {p.stock === 0 ? 'Agotado' : `${p.stock} un.`}
-                    </span>
-                  </td>
-                  <td className="p-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => handleBuyProduct(p)}
-                        disabled={p.stock === 0}
-                        title="Comprar Producto"
-                        className={`flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg transition-colors ${
-                          p.stock === 0 
-                            ? 'bg-slate-800 text-slate-600 cursor-not-allowed'
-                            : 'bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-500/30'
-                        }`}
-                      >
-                        <ShoppingCart className="w-3.5 h-3.5" /> Comprar
-                      </button>
-
-                      {user.role !== 'cliente' && (
-                        <button
-                          onClick={() => { setEditingProduct(p); setEditStock(p.stock); setEditPrice(p.price); }}
-                          title="Editar Stock y Precio"
-                          className="p-1.5 bg-slate-800 hover:bg-blue-600/20 text-slate-400 hover:text-blue-400 border border-slate-700 rounded-lg transition-colors"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
-                      )}
-
-                      {user.role === 'editor' && (
-                        <button 
-                          onClick={() => handleDeleteProducto(p.id)}
-                          title="Eliminar Producto" 
-                          className="p-1.5 bg-slate-800 hover:bg-red-600/20 text-slate-400 hover:text-red-400 border border-slate-700 rounded-lg transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  </td>
+        {loading ? (
+          <div className="flex flex-col items-center justify-center p-12 text-slate-400">
+            <Loader2 className="w-8 h-8 animate-spin text-emerald-400 mb-2" />
+            <p className="text-sm">Cargando catálogo desde Supabase...</p>
+          </div>
+        ) : (
+          <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg">
+            <table className="w-full text-left text-sm text-slate-300">
+              <thead className="bg-slate-800/60 text-slate-400 text-xs uppercase tracking-wider border-b border-slate-800">
+                <tr>
+                  <th className="p-4">ID</th>
+                  <th className="p-4">Nombre Producto</th>
+                  <th className="p-4">Descripción</th>
+                  <th className="p-4">Precio</th>
+                  <th className="p-4">Stock</th>
+                  <th className="p-4 text-right">Acciones</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {productos.map((p) => (
+                  <tr key={p.id} className="hover:bg-slate-800/30 transition-colors">
+                    <td className="p-4 font-mono text-xs text-slate-500">#{p.id}</td>
+                    <td className="p-4 font-semibold text-white capitalize">{p.name}</td>
+                    <td className="p-4 text-slate-400">{p.description}</td>
+                    <td className="p-4 text-emerald-400 font-medium">${p.price.toLocaleString('es-CL')}</td>
+                    <td className="p-4">
+                      <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
+                        p.stock === 0 ? 'bg-red-500/20 text-red-400 border border-red-500/30' :
+                        p.stock <= 5 ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
+                        'bg-slate-800 text-slate-300 border border-slate-700'
+                      }`}>
+                        {p.stock === 0 ? 'Agotado' : `${p.stock} un.`}
+                      </span>
+                    </td>
+                    <td className="p-4 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => handleBuyProduct(p)}
+                          disabled={p.stock === 0}
+                          title="Comprar Producto"
+                          className="bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white px-2.5 py-1 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1 border border-emerald-500/30"
+                        >
+                          <ShoppingCart className="w-3.5 h-3.5" /> Comprar
+                        </button>
+
+                        {user.role !== 'cliente' && (
+                          <button
+                            onClick={() => { setEditingProduct(p); setEditStock(p.stock); setEditPrice(p.price); }}
+                            className="p-1.5 bg-slate-800 hover:bg-blue-600/20 text-slate-400 hover:text-blue-400 border border-slate-700 rounded-lg"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+                        )}
+
+                        {user.role === 'editor' && (
+                          <button 
+                            onClick={() => handleDeleteProducto(p.id)}
+                            className="p-1.5 bg-slate-800 hover:bg-red-600/20 text-slate-400 hover:text-red-400 border border-slate-700 rounded-lg"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </main>
 
-      {/* Modal Editar Stock */}
+      {/* Modal Editar */}
       {editingProduct && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
           <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-md w-full shadow-2xl">
-            <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-3">
-              <h3 className="text-lg font-bold text-white">Editar Stock</h3>
-              <button onClick={() => setEditingProduct(null)} className="text-slate-400 hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
+            <h3 className="text-lg font-bold text-white mb-4">Editar Stock en Supabase</h3>
             <form onSubmit={handleSaveEdit} className="space-y-4">
-              <div>
-                <p className="text-xs text-slate-400 uppercase font-semibold">Producto</p>
-                <p className="text-base font-bold text-white capitalize">{editingProduct.name}</p>
-              </div>
-
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">Stock / Cantidad</label>
                 <input 
                   type="number" 
                   required 
-                  min="0"
                   value={editStock} 
                   onChange={(e) => setEditStock(Number(e.target.value))} 
                   className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white"
                 />
               </div>
-
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">Precio ($)</label>
                 <input 
                   type="number" 
                   required 
-                  min="0"
                   value={editPrice} 
                   onChange={(e) => setEditPrice(Number(e.target.value))} 
                   className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white"
                 />
               </div>
-
               <div className="flex justify-end gap-2 pt-2">
-                <button 
-                  type="button" 
-                  onClick={() => setEditingProduct(null)} 
-                  className="px-4 py-2 text-xs text-slate-400 hover:text-white"
-                >
-                  Cancelar
-                </button>
-                <button 
-                  type="submit" 
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg"
-                >
-                  Guardar Cambios
-                </button>
+                <button type="button" onClick={() => setEditingProduct(null)} className="px-4 py-2 text-xs text-slate-400">Cancelar</button>
+                <button type="submit" className="px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-lg">Guardar</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Modal Agregar Producto */}
+      {/* Modal Agregar */}
       {showProductModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
           <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-md w-full shadow-2xl">
-            <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-3">
-              <h3 className="text-lg font-bold text-white">Agregar Producto</h3>
-              <button onClick={() => setShowProductModal(false)} className="text-slate-400 hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
+            <h3 className="text-lg font-bold text-white mb-4">Agregar Producto</h3>
             <form onSubmit={handleAddProducto} className="space-y-4">
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">Nombre</label>
@@ -488,15 +427,6 @@ export default function App() {
                   required 
                   value={newName} 
                   onChange={(e) => setNewName(e.target.value)} 
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Descripción</label>
-                <input 
-                  type="text" 
-                  value={newDesc} 
-                  onChange={(e) => setNewDesc(e.target.value)} 
                   className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white"
                 />
               </div>
@@ -522,7 +452,6 @@ export default function App() {
                   />
                 </div>
               </div>
-
               <div className="flex justify-end gap-2 pt-2">
                 <button type="button" onClick={() => setShowProductModal(false)} className="px-4 py-2 text-xs text-slate-400">Cancelar</button>
                 <button type="submit" className="px-4 py-2 bg-emerald-600 text-white text-xs font-semibold rounded-lg">Guardar</button>
