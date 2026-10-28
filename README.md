@@ -21,20 +21,7 @@ VetCare 360 es una solución web integral para la gestión de clínicas veterina
 
 El sistema implementa un patrón desacoplado para el procesamiento seguro de acciones y órdenes en la plataforma.
 
-```text
-[ Cliente Web (React / Vercel) ]
-             │
-             │ 1. Evento de usuario (Botón / Orden) + JWT (AWS Cognito)
-             ▼
-[ AWS API Gateway + Cognito Authorizer ]
-             │
-             │ 2. Validación de Token e Invocación de Evento
-             ▼
-      [ AWS Lambda ]
-             │
-             │ 3. Procesamiento de Lógica & Inserción REST
-             ▼
-   [ Supabase (PostgreSQL) ]
+<img width="1150" height="769" alt="image" src="https://github.com/user-attachments/assets/a0d0503a-353a-4ce5-b2d6-4e3d98b6c5b8" />
 
 ### 🔄 Flujo de Transmisión de Datos Paso a Paso:
 
