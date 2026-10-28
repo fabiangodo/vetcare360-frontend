@@ -3,20 +3,27 @@
 const AWS_API_GATEWAY_URL = 'https://02aepkj5g9.execute-api.us-east-1.amazonaws.com/api/mascotas';
 
 export const registrarMascotaEnAWS = async (datosMascota: object) => {
-  // Buscar en todas las ubicaciones donde AWS Amplify / Cognito guardan los tokens
-  let token = null;
+  // 1. Buscar prioritariamente el idToken de la sesión Cognito
+  let token: string | null = null;
+
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
-    if (key && (key.includes('idToken') || key.includes('accessToken') || key.includes('jwt'))) {
+    if (key && key.includes('idToken')) {
       token = localStorage.getItem(key);
       if (token) break;
     }
   }
 
-  // Fallback si la clave se guardó directamente como token/jwt_token
+  // 2. Fallback a otras claves de sesión si no encuentra idToken directo
   if (!token) {
-    token = localStorage.getItem('jwt_token') || localStorage.getItem('token');
+    token = 
+      localStorage.getItem('idToken') || 
+      localStorage.getItem('jwt_token') || 
+      localStorage.getItem('token') ||
+      localStorage.getItem('accessToken');
   }
+
+  console.log('Token enviado al backend:', token ? 'Token cargado' : 'Sin token');
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
