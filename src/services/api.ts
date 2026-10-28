@@ -3,44 +3,29 @@
 const AWS_API_GATEWAY_URL = 'https://02aepkj5g9.execute-api.us-east-1.amazonaws.com/api/mascotas';
 
 /**
- * Busca de forma dinámica cualquier JWT válido generado por Cognito o la app
- * dentro de localStorage, inspeccionando todas las claves existentes.
+ * Obtiene el JWT leyendo el objeto 'vetcare_user' guardado en localStorage.
  */
-const getCognitoToken = (): string | null => {
-  // 1. Buscar en todas las claves creadas por Amplify / Cognito
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (!key) continue;
-
-    const lowerKey = key.toLowerCase();
-    // Cognito guarda las claves con formato: CognitoIdentityServiceProvider.<clientId>.<username>.idToken
-    if (lowerKey.includes('idtoken') || lowerKey.includes('accesstoken')) {
-      const value = localStorage.getItem(key);
-      if (value && value.startsWith('ey')) { // Los JWT siempre empiezan con 'ey'
-        return value;
-      }
+const getAuthToken = (): string | null => {
+  try {
+    const userDataStr = localStorage.getItem('vetcare_user');
+    if (userDataStr) {
+      const userData = JSON.parse(userDataStr);
+      // Extrae el token del objeto (revisa idToken, accessToken, token o jwt)
+      return userData.idToken || userData.accessToken || userData.token || userData.jwt || null;
     }
+  } catch (e) {
+    console.error('Error al parsear vetcare_user de localStorage', e);
   }
-
-  // 2. Búsqueda por nombres de clave estándar
-  const standardKeys = ['idToken', 'accessToken', 'jwt_token', 'token', 'jwt'];
-  for (const key of standardKeys) {
-    const value = localStorage.getItem(key);
-    if (value && value !== 'null' && value !== 'undefined') {
-      return value;
-    }
-  }
-
   return null;
 };
 
 export const registrarMascotaEnAWS = async (datosMascota: object) => {
-  const token = getCognitoToken();
+  const token = getAuthToken();
 
-  console.log('Token obtenido para API Gateway:', token ? `${token.substring(0, 20)}...` : 'NULL/VACIO');
+  console.log('Token recuperado de vetcare_user:', token ? `${token.substring(0, 15)}...` : 'NO ENCONTRADO');
 
   if (!token) {
-    throw new Error('No se encontró un token JWT activo en la sesión. Por favor, vuelve a iniciar sesión.');
+    throw new Error('No se encontró un token válido en vetcare_user. Inicia sesión de nuevo.');
   }
 
   const response = await fetch(AWS_API_GATEWAY_URL, {
@@ -57,9 +42,6 @@ export const registrarMascotaEnAWS = async (datosMascota: object) => {
   });
 
   if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error('Error 401: Token expirado o rechazado por Cognito.');
-    }
     throw new Error(`Error HTTP: ${response.status}`);
   }
 
