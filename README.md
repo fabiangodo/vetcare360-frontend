@@ -1,26 +1,4 @@
-# 💻 VetCare 360 - Single Page Application Frontend (React + TypeScript)
-
-## 📌 Contexto General del Proyecto
-VetCare 360 es una solución web integral para la gestión de clínicas veterinarias. Permite la interacción diferenciada según el perfil del usuario (Administrador, Veterinario y Cliente). Ofrece una interfaz moderna y reactiva, combinando persistencia directa en la nube y un flujo de backend desacoplado bajo una arquitectura Serverless.
-
----
-
-## 🛠️ Tecnologías Utilizadas
-- **Framework & Tooling:** React 18 + TypeScript + Vite
-- **Diseño & Estilos:** Tailwind CSS, Lucide React (Iconografía)
-- **Autenticación & Seguridad:** AWS Cognito (`us-east-1`)
-- **Backend & Integración Serverless:** AWS API Gateway + AWS Lambda (Node.js)
-- **Base de Datos & Persistencia:** Supabase (PostgreSQL) con API REST y JWT de acceso
-- **Hosting / Despliegue Continuo:** Vercel (CI/CD sincronizado con GitHub)
-
----
-
-## ☁️ Arquitectura Serverless y Flujo de Datos
-
-El sistema implementa un patrón desacoplado para el procesamiento seguro de acciones y órdenes en la plataforma.
-
-```text
-[ Cliente Web (React / Vercel) ]
+💻 VetCare 360 - Single Page Application Frontend (React + TypeScript)📌 Contexto General del ProyectoVetCare 360 es una solución web integral para la gestión de clínicas veterinarias. Permite la interacción diferenciada según el perfil del usuario (Administrador, Veterinario y Cliente). Ofrece una interfaz moderna y reactiva, combinando persistencia directa en la nube y un flujo de backend desacoplado bajo una arquitectura Serverless.🛠️ Tecnologías UtilizadasFramework & Tooling: React 18 + TypeScript + ViteDiseño & Estilos: Tailwind CSS, Lucide React (Iconografía)Autenticación & Seguridad: AWS Cognito (us-east-1)Backend & Integración Serverless: AWS API Gateway + AWS Lambda (Node.js)Base de Datos & Persistencia: Supabase (PostgreSQL) con API REST y JWT de accesoHosting / Despliegue Continuo: Vercel (CI/CD sincronizado con GitHub)☁️ Arquitectura Serverless y Flujo de DatosEl sistema implementa un patrón desacoplado para el procesamiento seguro de acciones y órdenes en la plataforma.Plaintext[ Cliente Web (React / Vercel) ]
              │
              │ 1. Evento de usuario (Botón / Orden) + JWT (AWS Cognito)
              ▼
