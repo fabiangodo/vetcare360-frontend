@@ -298,7 +298,7 @@ export default function App() {
         ...newObj
       };
       setMascotas(prev => [...prev, nuevaMascotaLocal]);
-      showNotification('¡Mascota enviada a AWS API Gateway con éxito!');
+      showNotification('¡Mascota registrada con éxito!');
     } catch (error) {
       console.error('Error enviando a AWS:', error);
       showNotification('Solicitud enviada a AWS. Revisa F12 -> Network.');
@@ -753,7 +753,7 @@ export default function App() {
           <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-md w-full shadow-2xl">
             <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-3">
               <h3 className="text-lg font-bold text-white">
-                {activeTab === 'mascotas' ? 'Registrar Nueva Mascota en AWS' : 'Nuevo Producto'}
+                {activeTab === 'mascotas' ? 'Registrar nueva mascota' : 'Nuevo Producto'}
               </h3>
               <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-white">
                 <X className="w-5 h-5" />
@@ -825,7 +825,7 @@ export default function App() {
                     type="submit"
                     className="w-1/2 bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg text-sm font-semibold"
                   >
-                    Enviar a AWS
+                    añadir
                   </button>
                 </div>
               </form>
