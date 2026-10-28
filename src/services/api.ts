@@ -1,25 +1,34 @@
 // src/services/api.ts
 
-// Asegúrate de que la URL coincida con la estructura de tu API Gateway
 const AWS_API_GATEWAY_URL = 'https://02aepkj5g9.execute-api.us-east-1.amazonaws.com/api/mascotas';
 
 export const registrarMascotaEnAWS = async (datosMascota: object) => {
-  // 1. Obtener token con fallback de prueba
-  const token = 
-    localStorage.getItem('jwt_token') || 
-    localStorage.getItem('idToken') || 
-    localStorage.getItem('accessToken') || 
-    localStorage.getItem('token') ||
-    ''; // Evita el throw inmediato para ver el comportamiento en Network
+  // Buscar en todas las ubicaciones donde AWS Amplify / Cognito guardan los tokens
+  let token = null;
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && (key.includes('idToken') || key.includes('accessToken') || key.includes('jwt'))) {
+      token = localStorage.getItem(key);
+      if (token) break;
+    }
+  }
 
-  console.log('Token obtenido para la petición:', token ? 'SI (Existe token)' : 'NO (Vacío)');
+  // Fallback si la clave se guardó directamente como token/jwt_token
+  if (!token) {
+    token = localStorage.getItem('jwt_token') || localStorage.getItem('token');
+  }
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
 
   const response = await fetch(AWS_API_GATEWAY_URL, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-    },
+    headers: headers,
     body: JSON.stringify({
       ...datosMascota,
       timestamp: new Date().toISOString(),
