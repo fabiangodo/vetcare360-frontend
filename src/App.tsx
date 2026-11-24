@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useAuth } from 'react-oidc-context';
 import { 
   Shield, 
   LogOut, 
@@ -18,11 +18,7 @@ import {
   Receipt,
   FileCheck
 } from 'lucide-react';
-import { registrarMascotaEnAWS } from './services/api';
-
-const supabaseUrl = 'https://ptrkxumyvnwecrnhfigr.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB0cmt4dW15dm53ZWNybmhmaWdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk0Mjg0MDksImV4cCI6MjEwNTAwNDQwOX0.qN76kRzW9Ba9xhIuGHZW6PefNMkCcNQl8_mdTfCRXY0'; 
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+import { obtenerProductos, crearProducto, actualizarProducto, eliminarProducto } from './services/api';
 
 export type UserRole = 'editor' | 'veterinario' | 'cliente';
 
@@ -79,19 +75,28 @@ interface Boleta {
 }
 
 export default function App() {
-  const [user, setUser] = useState<User | null>(null);
-  const [emailInput, setEmailInput] = useState('');
-  const [passwordInput, setPasswordInput] = useState('');
-  const [loginError, setLoginError] = useState('');
+  const auth = useAuth();
+  const token = auth.user?.access_token ?? '';
+  const user = useMemo<User | null>(() => {
+    if (!auth.isAuthenticated || !auth.user || auth.user.expired) return null;
+    const profile = auth.user.profile;
+    const raw = profile['cognito:groups'];
+    const groups = Array.isArray(raw) ? raw : typeof raw === 'string' ? [raw] : [];
+    const role: UserRole | null = groups.includes('Admin') ? 'editor' :
+      groups.includes('Veterinario') ? 'veterinario' : groups.includes('Cliente') ? 'cliente' : null;
+    if (!role) return null;
+    return { email: profile.email ?? '', nombre: profile.name ?? profile.email ?? profile.sub, role };
+  }, [auth.isAuthenticated, auth.user]);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<'mascotas' | 'citas' | 'productos' | 'usuarios' | 'boletas'>('mascotas');
+  const [activeTab, setActiveTab] = useState<'mascotas' | 'citas' | 'productos' | 'usuarios' | 'boletas'>('productos');
 
   // Listas de datos
   const [productos, setProductos] = useState<Producto[]>([]);
-  const [mascotas, setMascotas] = useState<Mascota[]>([]);
-  const [citas, setCitas] = useState<Cita[]>([]);
-  const [usuariosBD, setUsuariosBD] = useState<UsuarioBD[]>([]);
-  const [boletas, setBoletas] = useState<Boleta[]>([]);
+  const [mascotas] = useState<Mascota[]>([]);
+  const [citas] = useState<Cita[]>([]);
+  const [usuariosBD] = useState<UsuarioBD[]>([]);
+  const [boletas] = useState<Boleta[]>([]);
 
   // Carrito y boletas
   const [carrito, setCarrito] = useState<CartItem[]>([]);
@@ -121,86 +126,40 @@ export default function App() {
   const [editPrice, setEditPrice] = useState<number>(0);
   const [editStock, setEditStock] = useState<number>(0);
 
-  const fetchAllData = async () => {
+  useEffect(() => {
+    let cancelled = false;
+    setProductos([]);
+    setCarrito([]);
+    setBoletaActual(null);
+    setShowCarritoModal(false);
+    setEditingProduct(null);
+    setShowModal(false);
+    if (!user || !token) return;
     setLoading(true);
-
-    const resMascotas = await supabase.from('mascotas').select('*').order('id', { ascending: true });
-    if (resMascotas.data) setMascotas(resMascotas.data);
-
-    const resCitas = await supabase.from('citas').select('*').order('id', { ascending: true });
-    if (resCitas.data) setCitas(resCitas.data);
-
-    const resProd = await supabase.from('products').select('*').order('id', { ascending: true });
-    if (resProd.data) setProductos(resProd.data);
-
-    const resUsers = await supabase.from('usuarios').select('*').order('id', { ascending: true });
-    if (resUsers.data) setUsuariosBD(resUsers.data);
-
-    const resBoletas = await supabase.from('boletas').select('*').order('created_at', { ascending: false });
-    if (resBoletas.data) setBoletas(resBoletas.data);
-
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    const savedUser = localStorage.getItem('vetcare_user');
-    if (savedUser) {
-      try {
-        setUser(JSON.parse(savedUser));
-      } catch {
-        localStorage.removeItem('vetcare_user');
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    if (user) {
-      fetchAllData();
-    }
-  }, [user]);
+    setErrorMessage(null);
+    obtenerProductos(token).then(data => {
+      if (!cancelled) setProductos(data);
+    }).catch(error => {
+      if (!cancelled) setErrorMessage(String(error));
+    }).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [user, token]);
 
   const showNotification = (msg: string) => {
     setSuccessMessage(msg);
     setTimeout(() => setSuccessMessage(null), 3500);
   };
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoginError('');
-    const cleanEmail = emailInput.trim().toLowerCase();
-
-    let assignedRole: UserRole | null = null;
-    let userName = '';
-
-    if (cleanEmail === 'admin@test.com') {
-      assignedRole = 'editor';
-      userName = 'usuario_admin';
-    } else if (cleanEmail === 'editor@test.com') {
-      assignedRole = 'veterinario';
-      userName = 'usuario_veterinario';
-    } else if (cleanEmail === 'viewer@test.com') {
-      assignedRole = 'cliente';
-      userName = 'usuario_cliente';
-    }
-
-    if (assignedRole) {
-      const loggedUser: User = { email: cleanEmail, nombre: userName, role: assignedRole };
-      setUser(loggedUser);
-      
-      // Guardar objeto de sesión del usuario
-      localStorage.setItem('vetcare_user', JSON.stringify(loggedUser));
-
-      // Guardar token idToken dinámicamente para consumo en AWS API Gateway
-      localStorage.setItem('idToken', 'TOKEN_DE_PRUEBA_COGNITO');
-    } else {
-      setLoginError('Correo no registrado. Usa admin@test.com, editor@test.com o viewer@test.com');
-    }
-  };
-
-  const handleLogout = () => {
-    setUser(null);
+  const handleLogin = () => { void auth.signinRedirect().catch(error => setErrorMessage(String(error))); };
+  const handleLogout = async () => {
     localStorage.removeItem('vetcare_user');
     localStorage.removeItem('idToken');
+    await auth.removeUser();
+    const domain = import.meta.env.VITE_COGNITO_DOMAIN;
+    const clientId = import.meta.env.VITE_COGNITO_CLIENT_ID;
+    window.location.href = `${domain}/logout?client_id=${encodeURIComponent(clientId)}&logout_uri=${encodeURIComponent(window.location.origin + '/')}`;
   };
 
   // --- CARRITO Y COMPRAS ---
@@ -245,106 +204,56 @@ export default function App() {
     setCarrito(prev => prev.filter(item => item.producto.id !== prodId));
   };
 
-  const handleCheckout = async () => {
-    if (carrito.length === 0) return;
-
-    for (const item of carrito) {
-      const newStockVal = Math.max(0, item.producto.stock - item.cantidad);
-      setProductos(prev => prev.map(p => p.id === item.producto.id ? { ...p, stock: newStockVal } : p));
-      await supabase.from('products').update({ stock: newStockVal }).eq('id', item.producto.id);
-    }
-
-    const total = carrito.reduce((sum, item) => sum + (item.producto.price * item.cantidad), 0);
-    const nuevaBoleta: Boleta = {
-      id: `BOL-${Math.floor(100000 + Math.random() * 900000)}`,
-      fecha: new Date().toLocaleString('es-CL'),
-      cliente: user?.nombre || 'usuario_cliente',
-      items: carrito.map(i => ({
-        nombre: i.producto.name,
-        cantidad: i.cantidad,
-        precioUnitario: i.producto.price,
-        subtotal: i.producto.price * i.cantidad
-      })),
-      total
-    };
-
-    await supabase.from('boletas').insert([nuevaBoleta]);
-
-    setBoletas(prev => [nuevaBoleta, ...prev]);
-    setBoletaActual(nuevaBoleta);
-    setCarrito([]);
-    setShowCarritoModal(false);
-    showNotification('¡Compra realizada con éxito! Boleta guardada.');
+  const handleCheckout = () => {
+    alert('Compras pendientes de integración con el backend y Kafka.');
   };
 
-  // --- MASCOTAS (ENVIADO A AWS API GATEWAY) ---
-  const handleAddMascota = async (e: React.FormEvent) => {
+  const handleAddMascota = (e: React.FormEvent) => {
     e.preventDefault();
-    const newObj = {
-      nombre: mNombre,
-      especie: mEspecie,
-      raza: mRaza,
-      edad: Number(mEdad),
-      propietario: mPropietario
-    };
-
-    try {
-      // 1. Envía el Request a AWS API Gateway
-      await registrarMascotaEnAWS(newObj);
-
-      // 2. Agrega la mascota a la lista local para refrescar la tabla de inmediato
-      const nuevaMascotaLocal: Mascota = {
-        id: Date.now(),
-        ...newObj
-      };
-      setMascotas(prev => [...prev, nuevaMascotaLocal]);
-      showNotification('¡Mascota registrada con éxito!');
-    } catch (error) {
-      console.error('Error enviando a AWS:', error);
-      showNotification('Solicitud enviada a AWS. Revisa F12 -> Network.');
-    } finally {
-      setShowModal(false);
-      setMNombre(''); setMEspecie(''); setMRaza(''); setMEdad(''); setMPropietario('');
-    }
+    alert('Registro de mascotas pendiente de integración.');
   };
 
-  const handleDeleteMascota = async (id: number) => {
-    if (!confirm('¿Eliminar esta mascota?')) return;
-    setMascotas(prev => prev.filter(m => m.id !== id));
-    await supabase.from('mascotas').delete().eq('id', id);
-    showNotification('Mascota eliminada de la base de datos');
+  const handleDeleteMascota = (_id: number) => {
+    alert('Eliminación de mascotas pendiente de integración.');
   };
 
-  // --- PRODUCTOS ---
   const handleSaveEditProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingProduct) return;
-    const updatedProd = { ...editingProduct, stock: editStock, price: editPrice };
-    setProductos(prev => prev.map(p => p.id === editingProduct.id ? updatedProd : p));
-    setEditingProduct(null);
-
-    await supabase.from('products').update({ stock: editStock, price: editPrice }).eq('id', editingProduct.id);
-    showNotification('Stock actualizado');
+    if (!editingProduct || !user || user.role === 'cliente') return;
+    setErrorMessage(null);
+    try {
+      const { id, name, description } = editingProduct;
+      const updated = await actualizarProducto(id, { name, description, price: editPrice, stock: editStock }, token);
+      setProductos(prev => prev.map(p => p.id === id ? updated : p));
+      setEditingProduct(null);
+      showNotification('Producto actualizado');
+    } catch (error) { setErrorMessage(String(error)); alert(String(error)); }
   };
 
   const handleAddProducto = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newProd = { name: newName, description: newDesc || 'Sin descripción', price: Number(newPrice), stock: Number(newStock) };
-    const { data, error } = await supabase.from('products').insert([newProd]).select();
-    if (!error && data) {
-      setProductos(prev => [...prev, data[0]]);
+    if (!user || user.role === 'cliente') return;
+    setErrorMessage(null);
+    try {
+      const saved = await crearProducto({ name: newName, description: newDesc || 'Sin descripción', price: Number(newPrice), stock: Number(newStock) }, token);
+      setProductos(prev => [...prev, saved]);
+      setShowModal(false);
+      setNewName(''); setNewDesc(''); setNewPrice(''); setNewStock('');
       showNotification('Producto guardado');
-    }
-    setShowModal(false);
-    setNewName(''); setNewDesc(''); setNewPrice(''); setNewStock('');
+    } catch (error) { setErrorMessage(String(error)); alert(String(error)); }
   };
 
   const handleDeleteProducto = async (id: number) => {
-    if (!confirm('¿Eliminar producto?')) return;
-    setProductos(prev => prev.filter(p => p.id !== id));
-    await supabase.from('products').delete().eq('id', id);
-    showNotification('Producto eliminado');
+    if (user?.role !== 'editor' || !confirm('¿Eliminar producto?')) return;
+    setErrorMessage(null);
+    try {
+      await eliminarProducto(id, token);
+      setProductos(prev => prev.filter(p => p.id !== id));
+      showNotification('Producto eliminado');
+    } catch (error) { setErrorMessage(String(error)); }
   };
+
+  if (auth.isLoading) return <div className="p-8 text-white">Cargando sesión...</div>;
 
   if (!user) {
     return (
@@ -358,50 +267,19 @@ export default function App() {
             <p className="text-slate-400 text-sm mt-1">Plataforma de Gestión Veterinaria</p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Correo Electrónico</label>
-              <input
-                type="email"
-                required
-                value={emailInput}
-                onChange={(e) => setEmailInput(e.target.value)}
-                placeholder="admin@test.com"
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Contraseña</label>
-              <input
-                type="password"
-                required
-                value={passwordInput}
-                onChange={(e) => setPasswordInput(e.target.value)}
-                placeholder="••••••••"
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-              />
-            </div>
-
-            {loginError && (
-              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-xs">
-                {loginError}
-              </div>
-            )}
-
-            <button
-              type="submit"
-              className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2.5 rounded-lg transition-colors shadow-lg"
-            >
-              Iniciar Sesión
-            </button>
-          </form>
+          {(auth.error || errorMessage) && <p className="text-red-400 mb-4">{auth.error?.message || errorMessage}</p>}
+          {auth.isAuthenticated ? (
+            <><p className="text-red-400 mb-4">Cuenta sin rol autorizado o sesión expirada.</p><button onClick={handleLogout} className="w-full bg-slate-700 text-white py-3 rounded-lg">Cerrar sesión</button></>
+          ) : (
+            <button onClick={handleLogin} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-lg">Iniciar sesión con Cognito</button>
+          )}
 
           <div className="mt-8 pt-6 border-t border-slate-700/50 text-xs text-slate-400">
             <p className="font-semibold text-slate-300 mb-2">Cuentas disponibles:</p>
             <ul className="space-y-1 font-mono text-[11px]">
               <li><strong className="text-purple-400">Admin:</strong> admin@test.com</li>
-              <li><strong className="text-blue-400">Veterinario:</strong> editor@test.com</li>
-              <li><strong className="text-emerald-400">Cliente:</strong> viewer@test.com</li>
+              <li><strong className="text-blue-400">Veterinario:</strong> veterinario@test.com</li>
+              <li><strong className="text-emerald-400">Cliente:</strong> cliente@test.com</li>
             </ul>
           </div>
         </div>
@@ -421,7 +299,7 @@ export default function App() {
           </div>
           <div>
             <h1 className="font-bold text-lg leading-none text-white">VetCare 360</h1>
-            <span className="text-xs text-emerald-400 font-medium">AWS API Gateway Conectado</span>
+            <span className="text-xs text-emerald-400 font-medium">Entorno de desarrollo</span>
           </div>
         </div>
 
@@ -444,7 +322,7 @@ export default function App() {
           <div className="text-right hidden sm:block">
             <p className="text-sm font-medium text-white">{user.nombre}</p>
             <span className="inline-block px-2 py-0.5 text-[10px] font-bold rounded-full uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-              Rol: {user.role}
+              Rol: {user.role === 'editor' ? 'Admin' : user.role}
             </span>
           </div>
           <button onClick={handleLogout} title="Cerrar Sesión" className="p-2 text-slate-400 hover:text-white rounded-lg">
@@ -506,6 +384,8 @@ export default function App() {
       </nav>
 
       <main className="flex-1 p-6 max-w-7xl w-full mx-auto">
+        {errorMessage && <p role="alert" className="mb-4 p-4 text-red-400 bg-red-500/10 rounded-xl">{errorMessage}</p>}
+        {activeTab !== 'productos' && <p className="mb-4 text-amber-400">Módulo pendiente de integración con el backend. Datos aún no disponibles.</p>}
         {successMessage && (
           <div className="mb-4 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center gap-3 text-emerald-400">
             <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
@@ -684,7 +564,7 @@ export default function App() {
                 {boletas.length === 0 ? (
                   <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center text-slate-400">
                     <Receipt className="w-12 h-12 mx-auto mb-2 text-slate-600" />
-                    <p className="text-sm font-semibold">Aún no hay boletas registradas.</p>
+                    <p className="text-sm font-semibold">Historial pendiente de integración.</p>
                   </div>
                 ) : (
                   boletas.map((b) => (
@@ -1007,7 +887,7 @@ export default function App() {
                   onClick={handleCheckout}
                   className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-xl text-sm font-bold shadow-lg transition-colors"
                 >
-                  Confirmar Compra
+                  Compra pendiente de integración
                 </button>
               </div>
             )}

@@ -1,15 +1,24 @@
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import './index.css'; // <-- Importación agregada para cargar Tailwind
+import './index.css';
 import { AuthProvider } from 'react-oidc-context';
 
 const cognitoAuthConfig = {
-  authority: "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_Gz8tIv6dd",
-  client_id: "3j84mt3n833o1qucrr2uuo3ohc",
-  redirect_uri: "http://localhost:5173/",
-  response_type: "code",
-  scope: "openid", // <-- Solo 'openid' para asegurar la autorización inicial
+  authority: import.meta.env.VITE_COGNITO_AUTHORITY,
+  client_id: import.meta.env.VITE_COGNITO_CLIENT_ID,
+  redirect_uri: window.location.origin + '/',
+  response_type: 'code',
+  scope: 'openid email profile',
+
+  onSigninCallback: () => {
+    window.history.replaceState(
+      {},
+      document.title,
+      window.location.pathname
+    );
+  },
 };
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
